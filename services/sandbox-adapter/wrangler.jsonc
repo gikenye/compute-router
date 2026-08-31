@@ -1,0 +1,28 @@
+{
+  "name": "sandbox-adapter",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "lite",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "Sandbox", "name": "Sandbox" }
+    ]
+  },
+  "migrations": [
+    { "new_sqlite_classes": ["Sandbox"], "tag": "v1" }
+  ],
+  "vars": {
+    // RPC is required — HTTP/WebSocket transports were removed from
+    // Sandbox SDK releases after July 9, 2026.
+    "SANDBOX_TRANSPORT": "rpc"
+  }
+}

@@ -1,0 +1,16 @@
+.env
+.dev.vars
+node_modules/
+dist/
+*.log
+services/core/server
+services/core/compute-router-core
+.wrangler/
+tools/txs/.env
+tools/txs/data/wallets.csv
+tools/txs/data/driver-state.json
+tools/txs/data/journey-log.jsonl
+tools/*/
+tools/
+docs/
+

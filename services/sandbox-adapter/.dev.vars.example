@@ -1,0 +1,5 @@
+# Copy to .dev.vars for local `wrangler dev` — this file is read
+# automatically by Wrangler and should NEVER be committed with real
+# values. For cloud deploy, use `wrangler secret put ADAPTER_SHARED_SECRET`
+# instead of putting it in wrangler.jsonc.
+ADAPTER_SHARED_SECRET=dev-local-secret-change-me

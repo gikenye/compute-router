@@ -1,0 +1,20 @@
+# Optional cloud deploy target — one turnkey option, not the only one.
+# `fly launch` will regenerate/confirm most of this; treat these values
+# as a starting point, not gospel.
+app = "compute-router-core"   # CHANGE — must be globally unique on Fly
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  PORT = "8080"
+  # Secrets (X402_API_KEY, PAYOUT_WALLET, etc.) go via:
+  #   fly secrets set X402_API_KEY=... PAYOUT_WALLET=... etc.
+  # Do NOT put secrets in this file.
