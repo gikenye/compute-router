@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compute Router — operational compute for agents</title>
+  <meta name="description" content="Short-lived isolated compute environments for AI agents. Pay $0.02 for each two-minute period with USDC or USDT on Celo.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="page">
+    <header class="header">
+      <a class="logo" href="#top" aria-label="Compute Router home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(-30 12 12)"><circle cx="7.3" cy="3.2" r="1.45"/><rect x="5.5" y="4.7" width="3.6" height="14.6" rx="1.8"/><rect x="14.9" y="4.7" width="3.6" height="14.6" rx="1.8"/><circle cx="16.7" cy="20.8" r="1.45"/></g></svg>
+        <span>Compute Router</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#runtime">Runtime</a>
+        <a href="#protocol">Protocol</a>
+        <a href="https://compute-router-app.fly.dev/.well-known/agent-card.json">Agent card</a>
+      </nav>
+      <button class="button button-solid copy-prompt" type="button" data-copy-prompt>
+        <span class="agent-icons" aria-hidden="true">
+          <img src="https://developers.cloudflare.com/icons/agents/claude/light.svg" alt="">
+          <img src="https://developers.cloudflare.com/icons/agents/codex/light.svg" alt="">
+          <img src="https://developers.cloudflare.com/icons/agents/cursor/light.svg" alt="">
+          <img src="https://developers.cloudflare.com/icons/agents/opencode/light.svg" alt="">
+        </span>
+        <span data-copy-label>Copy prompt</span>
+      </button>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <h1>Operational compute<br>for <em>AI agents.</em></h1>
+        <p class="lede">Provision an isolated build environment, run real commands, and release it when finished. No account. No idle infrastructure. Pay <strong>$0.02 for each two-minute period</strong> with <span class="inline-assets"><img src="https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg" alt=""> USDC</span> or <span class="inline-assets"><img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png" alt=""> USDT</span> on Celo.</p>
+        <div class="actions" id="connect">
+          <button class="button button-solid copy-prompt" type="button" data-copy-prompt>
+            <span class="agent-icons" aria-hidden="true">
+              <img src="https://developers.cloudflare.com/icons/agents/claude/light.svg" alt="">
+              <img src="https://developers.cloudflare.com/icons/agents/codex/light.svg" alt="">
+              <img src="https://developers.cloudflare.com/icons/agents/cursor/light.svg" alt="">
+              <img src="https://developers.cloudflare.com/icons/agents/opencode/light.svg" alt="">
+            </span>
+            <span data-copy-label>Copy prompt</span>
+          </button>
+          <a class="button button-ghost" href="https://compute-router-app.fly.dev/.well-known/agent-card.json">Agent card <span aria-hidden="true">↗</span></a>
+          <a class="button button-ghost" href="#protocol">View protocol <span aria-hidden="true">↓</span></a>
+        </div>
+      </section>
+
+      <section class="runtime-strip" id="runtime" aria-label="Live deployment">
+        <div class="runtime-label"><span class="pulse"></span><span>Live deployment</span></div>
+        <div class="runtime-item"><span class="label">MCP</span><code id="mcp-url">/mcp</code></div>
+        <div class="runtime-item settlement-item"><span class="label">Payment</span><strong><span class="asset-mark">Every 2 minutes</span></strong><div class="asset-list"><span><img src="https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg" alt=""> USDC</span><span><img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png" alt=""> USDT</span></div></div>
+        <div class="runtime-item"><span class="label">Price</span><strong>$0.02 / 2 min</strong></div>
+      </section>
+
+      <section class="protocol" id="protocol">
+        <div class="protocol-copy">
+          <div class="section-kicker">The runtime loop</div>
+          <h2>Pay only when<br>your agent runs.</h2>
+          <p>One MCP call starts a short-lived environment. The same session persists across commands, then disappears on release or expiry.</p>
+          <div class="tool-list">
+            <div><span>01</span><strong>provision_env</strong><small>authorize + boot</small></div>
+            <div><span>02</span><strong>exec</strong><small>run commands</small></div>
+            <div><span>03</span><strong>release</strong><small>destroy + close</small></div>
+          </div>
+        </div>
+        <div class="terminal" aria-label="MCP request example">
+          <div class="terminal-top"><span><i></i><i></i><i></i></span><span>mcp / provision_env</span><span class="terminal-live">LIVE</span></div>
+          <pre id="terminal-body"></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Compute Router · agent-native infrastructure</span>
+      <span><a href="https://compute-router-app.fly.dev/.well-known/agent-card.json">ERC-8004 agent card ↗</a></span>
+    </footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

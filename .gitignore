@@ -1,16 +1,24 @@
+# --- Secrets ---
 .env
 .dev.vars
+.celobuilders-credentials
+.celo-builders.json
+celo-builders-registration.md
+/docs/
+
+# --- Build artifacts ---
 node_modules/
 dist/
 *.log
 services/core/server
 services/core/compute-router-core
 .wrangler/
-tools/txs/.env
-tools/txs/data/wallets.csv
-tools/txs/data/driver-state.json
-tools/txs/data/journey-log.jsonl
-tools/*/
-tools/
-docs/
 
+# --- Internal IP: architecture specs, ADRs, ops runbooks, dev-decision
+# history, and internal tooling. This repo is public for the hackathon
+# submission; the code in services/ is the product. Everything below is
+# treated as organizational IP and is NOT part of the public repo,
+# regardless of how the rest of this list evolves. ---
+/internal-docs/
+/AGENTS.md
+/tools/

@@ -1,4 +1,4 @@
-.PHONY: deps dev-core dev-adapter smoke-test build-core deploy-adapter deploy-core-fly txs-fund txs-journey-once txs-driver
+.PHONY: deps dev-core dev-adapter smoke-test build-core deploy-adapter deploy-core-fly txs-fund txs-journey-once txs-driver agent-register-testnet agent-register-mainnet
 
 # Run this FIRST, locally (needs network — this repo was scaffolded
 # without network access, so no go.sum/lockfile exists yet).
@@ -6,6 +6,7 @@ deps:
 	cd services/core && go get github.com/modelcontextprotocol/go-sdk/mcp@latest && go mod tidy
 	cd services/sandbox-adapter && npm install
 	cd tools/txs && npm install
+	cd tools/agent-identity && npm install
 
 # Run the Go core service locally. Reads .env — copy .env.example first.
 dev-core:
@@ -50,3 +51,15 @@ txs-journey-once:
 # tools/txs/data/driver-state.json so restarts don't replay everything.
 txs-driver:
 	cd tools/txs && npm run driver
+
+# --- ERC-8004 agent identity (tools/agent-identity) — see internal-docs/ASD-STE-103.md ---
+
+# Testnet dry run — ALWAYS do this before mainnet. Mints a real (if
+# throwaway) public NFT on Celo Sepolia.
+agent-register-testnet:
+	cd tools/agent-identity && npm run register:testnet
+
+# The real, credited registration. Costs real gas, mints a real public
+# NFT that isn't casually undoable. Read internal-docs/ASD-STE-103.md first.
+agent-register-mainnet:
+	cd tools/agent-identity && npm run register:mainnet

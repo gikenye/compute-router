@@ -1,12 +1,3 @@
-import { IdentityRegistry } from '@chaoschain/sdk';
-
-const registry = new IdentityRegistry(provider);
-
-// Upload registration file to IPFS first
-const agentURI = 'ipfs://QmYourRegistrationFile';
-
-// Register and get agent ID
-const tx = await registry.register(agentURI);
-const agentId = tx.events.Transfer.returnValues.tokenId;
-
-console.log('Agent registered with ID:', agentId);
+AGENT_PRIVATE_KEY="${AGENT_PRIVATE_KEY:?Set AGENT_PRIVATE_KEY in your shell}" \
+CELO_RPC_URL="${CELO_RPC_URL:-https://forno.celo.org}" \
+npx -y -p viem node -e "(async () => { const { createPublicClient, createWalletClient, http, encodeFunctionData, formatUnits } = require('viem'); const { celo } = require('viem/chains'); const { privateKeyToAccount } = require('viem/accounts'); const account = privateKeyToAccount(process.env.AGENT_PRIVATE_KEY.startsWith('0x') ? process.env.AGENT_PRIVATE_KEY : '0x' + process.env.AGENT_PRIVATE_KEY); const publicClient = createPublicClient({ chain: celo, transport: http(process.env.CELO_RPC_URL) }); const walletClient = createWalletClient({ account, chain: celo, transport: http(process.env.CELO_RPC_URL) }); const address = account.address; console.log('wallet', address); const usdtAddr = '0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e'; const usdtAdapter = '0x0e2a3e05bc9a16f5292a6170456a710cb89c6f72'; const erc20 = [{ name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }]; const bal = await publicClient.readContract({ address: usdtAddr, abi: erc20, functionName: 'balanceOf', args: [address] }); console.log('usdtBalance', formatUnits(bal, 6)); const registryAddress = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'; const abi = [{ name: 'register', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentURI', type: 'string' }], outputs: [{ name: '', type: 'uint256' }] }]; const agentURI = 'https://compute-router-two.vercel.app/.well-known/agent.json'; const calldata = encodeFunctionData({ abi, functionName: 'register', args: [agentURI] }); const gasEstimate = await publicClient.estimateGas({ account: address, to: registryAddress, data: calldata, feeCurrency: usdtAdapter, type: '0x7b' }); console.log('gasEstimate', gasEstimate.toString()); const txHash = await walletClient.writeContract({ address: registryAddress, abi, functionName: 'register', args: [agentURI], feeCurrency: usdtAdapter, type: '0x7b', account: address, gas: gasEstimate }); console.log('txHash', txHash); const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash }); console.log('status', receipt.status, 'block', receipt.blockNumber); })().catch(err => { console.error(err); process.exit(1); });"

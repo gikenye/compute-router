@@ -1,6 +1,4 @@
-// Package sandboxclient is the ONLY place in this service that knows
-// services/sandbox-adapter exists. Plain HTTP, shared-secret authed.
-// See /docs/ADR-001-language-choice.md for why this boundary exists.
+// Package sandboxclient provides the authenticated adapter client.
 package sandboxclient
 
 import (
@@ -49,11 +47,7 @@ func (c *Client) post(path string, payload any, out any) error {
 	return nil
 }
 
-// Boot provisions a fresh sandbox for the given session ID. NOTE
-// (SPEC-100 update): template selection at runtime is NOT supported by
-// Cloudflare's container model — the image is fixed at Worker deploy
-// time. This call passes template through for forward-compatibility but
-// the MVP adapter ignores it and always boots the single deployed image.
+// Boot provisions a fresh sandbox for the given session ID.
 func (c *Client) Boot(sessionID, template string) error {
 	return c.post("/boot", map[string]string{
 		"session_id": sessionID,

@@ -1,7 +1,7 @@
 # Optional cloud deploy target — one turnkey option, not the only one.
 # `fly launch` will regenerate/confirm most of this; treat these values
 # as a starting point, not gospel.
-app = "compute-router-core"   # CHANGE — must be globally unique on Fly
+app = "compute-router-app"
 primary_region = "iad"
 
 [build]
