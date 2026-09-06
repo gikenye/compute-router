@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -27,6 +28,15 @@ type Sender struct {
 	// Transfer calls each get a unique nonce.
 	nonceMu sync.Mutex
 }
+
+type TransferError struct {
+	TxHash    string
+	Confirmed bool
+	Err       error
+}
+
+func (e *TransferError) Error() string { return e.Err.Error() }
+func (e *TransferError) Unwrap() error { return e.Err }
 
 func NewSender(rpcURL, privateKey, payout string, chainID int64) (*Sender, error) {
 	if privateKey == "" {
@@ -95,19 +105,33 @@ func (s *Sender) Transfer(ctx context.Context, asset, payer, amount, attribution
 	}
 	receipt, err := bind.WaitMined(ctx, s.rpc, signed)
 	if err != nil {
-		return "", fmt.Errorf("wait for refund transaction %s: %w", signed.Hash().Hex(), err)
+		return signed.Hash().Hex(), &TransferError{TxHash: signed.Hash().Hex(), Err: fmt.Errorf("wait for refund transaction %s: %w", signed.Hash().Hex(), err)}
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		return "", fmt.Errorf("refund transaction %s failed on-chain", signed.Hash().Hex())
+		return signed.Hash().Hex(), &TransferError{TxHash: signed.Hash().Hex(), Confirmed: true, Err: fmt.Errorf("refund transaction %s failed on-chain", signed.Hash().Hex())}
 	}
 	mined, _, err := s.rpc.TransactionByHash(ctx, signed.Hash())
 	if err != nil {
-		return "", fmt.Errorf("read mined refund transaction %s: %w", signed.Hash().Hex(), err)
+		return signed.Hash().Hex(), &TransferError{TxHash: signed.Hash().Hex(), Err: fmt.Errorf("read mined refund transaction %s: %w", signed.Hash().Hex(), err)}
 	}
 	if !bytes.HasSuffix(mined.Data(), attributionSuffix(attributionTag)) {
-		return "", fmt.Errorf("refund transaction %s is missing attribution suffix", signed.Hash().Hex())
+		return signed.Hash().Hex(), &TransferError{TxHash: signed.Hash().Hex(), Confirmed: true, Err: fmt.Errorf("refund transaction %s is missing attribution suffix", signed.Hash().Hex())}
 	}
 	return signed.Hash().Hex(), nil
+}
+
+func (s *Sender) Reconcile(ctx context.Context, txHash string) (known, successful bool, err error) {
+	if s == nil {
+		return false, false, fmt.Errorf("automatic refunds are not configured")
+	}
+	receipt, err := s.rpc.TransactionReceipt(ctx, common.HexToHash(txHash))
+	if err != nil {
+		if err == ethereum.NotFound {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	return true, receipt.Status == types.ReceiptStatusSuccessful, nil
 }
 
 func attributionSuffix(code string) []byte {

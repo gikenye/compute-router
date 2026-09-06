@@ -104,6 +104,9 @@ async function main(): Promise<void> {
   console.log("txHash", hash);
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(`registration transaction reverted: ${hash}`);
+  }
   console.log("status", receipt.status, "block", receipt.blockNumber.toString());
 }
 

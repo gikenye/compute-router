@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -98,6 +99,9 @@ func (s *Store) Refund(ctx context.Context, paymentData, asset, amount, reason s
 	s.mu.Lock()
 	if existing, ok := s.findLocked(id); ok {
 		s.mu.Unlock()
+		if existing.TxHash != "" && (existing.Status == "unknown" || existing.Status == "submitted") {
+			return s.reconcile(ctx, existing)
+		}
 		return existing, nil
 	}
 	payer := payerFromPayment(paymentData)
@@ -121,10 +125,22 @@ func (s *Store) Refund(ctx context.Context, paymentData, asset, amount, reason s
 
 	txHash, transferErr := s.sender.Transfer(ctx, asset, payer, amount, s.tag)
 	if transferErr != nil {
-		// Mark the reservation as failed so operators can investigate.
-		if _, statusErr := s.updateStatus(id, "failed", "", transferErr.Error()); statusErr != nil {
+		status := "failed"
+		if txHash != "" {
+			status = "unknown"
+			var typedErr *TransferError
+			if errors.As(transferErr, &typedErr) && typedErr.Confirmed {
+				status = "failed"
+			}
+		}
+		if _, statusErr := s.updateStatus(id, status, txHash, transferErr.Error()); statusErr != nil {
 			return pendingRecord, fmt.Errorf("refund transfer failed and ledger update failed: %v; ledger error: %w", transferErr, statusErr)
 		}
+		if txHash != "" {
+			pendingRecord.TxHash = txHash
+			return pendingRecord, fmt.Errorf("refund transaction %s requires reconciliation: %w", txHash, transferErr)
+		}
+
 		return Record{}, transferErr
 	}
 
@@ -135,6 +151,21 @@ func (s *Store) Refund(ctx context.Context, paymentData, asset, amount, reason s
 		return pendingRecord, fmt.Errorf("refund submitted as %s but ledger update failed: %w", txHash, statusErr)
 	}
 	return refunded, nil
+}
+
+func (s *Store) reconcile(ctx context.Context, record Record) (Record, error) {
+	known, successful, err := s.sender.Reconcile(ctx, record.TxHash)
+	if err != nil {
+		return record, fmt.Errorf("reconcile refund transaction %s: %w", record.TxHash, err)
+	}
+	if !known {
+		return record, nil
+	}
+	status := "failed"
+	if successful {
+		status = "refunded"
+	}
+	return s.updateStatus(record.ID, status, record.TxHash, "")
 }
 
 // writeLocked appends r to the ledger. Caller must hold s.mu.
@@ -154,7 +185,22 @@ func (s *Store) writeLocked(r Record) (Record, error) {
 	if _, err := f.Write(append(line, '\n')); err != nil {
 		return Record{}, fmt.Errorf("write refund ledger: %w", err)
 	}
+	if err := f.Sync(); err != nil {
+		return Record{}, fmt.Errorf("sync refund ledger: %w", err)
+	}
+	if err := syncDirectory(filepathDir(s.path)); err != nil {
+		return Record{}, fmt.Errorf("sync refund ledger directory: %w", err)
+	}
 	return r, nil
+}
+
+func syncDirectory(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 // updateStatus appends an updated copy of the record identified by id.
