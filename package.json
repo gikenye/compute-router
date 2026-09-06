@@ -7,6 +7,7 @@
     "register": "tsx 8004-register.ts"
   },
   "dependencies": {
+    "@cloudflare/sandbox": "0.7.0",
     "viem": "2.36.0"
   },
   "devDependencies": {

@@ -1,0 +1,23 @@
+{
+  "name": "compute-router",
+  "main": "services/sandbox-adapter/src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "services/sandbox-adapter/Dockerfile",
+      "instance_type": "lite",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "Sandbox", "name": "Sandbox" }
+    ]
+  },
+  "vars": {
+    "SANDBOX_TRANSPORT": "rpc"
+  }
+}
