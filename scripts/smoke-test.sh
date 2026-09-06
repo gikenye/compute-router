@@ -11,7 +11,7 @@ PORT="${PORT:-8080}"
 BASE="http://localhost:${PORT}"
 
 echo "--- 1. MCP initialize handshake ---"
-curl -sS -X POST "$BASE/" \
+curl -sS -X POST "$BASE/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{
@@ -29,7 +29,7 @@ echo "If that returned a JSON-RPC result with serverInfo, the MCP server is up."
 
 echo
 echo "--- 2. tools/list ---"
-curl -sS -X POST "$BASE/" \
+curl -sS -X POST "$BASE/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
@@ -39,8 +39,8 @@ echo "Expect: provision_env, exec, extend_ceiling, release listed."
 echo
 echo "--- 3. tools/call provision_env WITHOUT payment_data ---"
 echo "Expect: isError=true, payment_required content — this confirms"
-echo "SPEC-100 §5.2's structured-payment-signal design actually works."
-curl -sS -X POST "$BASE/" \
+echo "Structured payment-signal flow works."
+curl -sS -X POST "$BASE/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{
@@ -53,4 +53,14 @@ curl -sS -X POST "$BASE/" \
     }
   }'
 echo
+echo
+echo "--- 4. Web UI at root ---"
+root_status="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/")"
+styles_status="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/styles.css")"
+printf 'GET / -> HTTP %s\n' "$root_status"
+printf 'GET /styles.css -> HTTP %s\n' "$styles_status"
+test "$root_status" = "200"
+test "$styles_status" = "200"
+echo "Expect 200 for both — confirms MCP moving to /mcp didn't break static serving at root."
+
 echo "--- Smoke test done. Real payment flow needs testnet funds + a signed payment_data — not covered here. ---"

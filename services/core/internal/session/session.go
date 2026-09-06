@@ -1,8 +1,4 @@
-// Package session tracks lease state in memory. Fine for the hackathon
-// MVP and local debugging; NOT durable across restarts. Swap the store
-// for something persistent before this is a real business (SPEC-100
-// doesn't mandate a specific store — this is a deliberate MVP shortcut,
-// noted here so nobody mistakes it for a permanent decision).
+// Package session tracks active lease state in memory.
 package session
 
 import (
@@ -20,8 +16,8 @@ type Lease struct {
 }
 
 type Store struct {
-	mu      sync.Mutex
-	leases  map[string]*Lease
+	mu     sync.Mutex
+	leases map[string]*Lease
 }
 
 func NewStore() *Store {
@@ -67,12 +63,6 @@ func (s *Store) Delete(id string) {
 	delete(s.leases, id)
 }
 
-// reapLoop clears expired leases periodically. This is a memory
-// housekeeping sweep only — it does NOT call the sandbox adapter to
-// tear anything down. Actual sandbox teardown relies on Sandbox SDK's
-// own idle timeout per SPEC-100 §5.3 (UNCONFIRMED — verify against
-// current Sandbox SDK docs; add an explicit destroy call here if that
-// assumption turns out to be wrong).
 func (s *Store) reapLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	for range ticker.C {

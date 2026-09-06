@@ -1,20 +1,22 @@
-// Command server runs the MCP + x402 resource server for the compute
-// sandbox product. See /docs/SPEC-100.md before changing anything here,
-// and /docs/ADR-001-language-choice.md for why this is Go and not
-// TypeScript.
+// Command server runs the MCP and x402 resource server.
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/YOUR_ORG/compute-router/services/core/internal/config"
-	appmcp "github.com/YOUR_ORG/compute-router/services/core/internal/mcp"
-	"github.com/YOUR_ORG/compute-router/services/core/internal/payment"
-	"github.com/YOUR_ORG/compute-router/services/core/internal/sandboxclient"
-	"github.com/YOUR_ORG/compute-router/services/core/internal/session"
+	"github.com/gikenye/compute-router/services/core/internal/agentcard"
+	"github.com/gikenye/compute-router/services/core/internal/config"
+	appmcp "github.com/gikenye/compute-router/services/core/internal/mcp"
+	"github.com/gikenye/compute-router/services/core/internal/payment"
+	"github.com/gikenye/compute-router/services/core/internal/refunds"
+	"github.com/gikenye/compute-router/services/core/internal/safety"
+	"github.com/gikenye/compute-router/services/core/internal/sandboxclient"
+	"github.com/gikenye/compute-router/services/core/internal/session"
 )
 
 func main() {
@@ -27,7 +29,9 @@ func main() {
 		Cfg:      cfg,
 		Sessions: session.NewStore(),
 		Pay:      payment.New(cfg.FacilitatorURL, cfg.FacilitatorAPIKey),
+		Refunds:  refunds.New(cfg.RefundLedgerPath, mustRefundSender(cfg), cfg.AttributionTag),
 		Sandbox:  sandboxclient.New(cfg.SandboxAdapterURL, cfg.SandboxAdapterSecret),
+		Safety:   safety.New(cfg),
 	}
 
 	server := gomcp.NewServer(&gomcp.Implementation{
@@ -37,7 +41,7 @@ func main() {
 
 	gomcp.AddTool(server, &gomcp.Tool{
 		Name:        "provision_env",
-		Description: "Provision a fresh sandboxed shell with preinstalled build tools. Costs USDC on Celo, billed at provision time for a fixed block (see SPEC-100 §4.4 for the metered-billing stretch goal).",
+		Description: "Provision a fresh sandboxed shell with preinstalled build tools. Costs USDC or USDT on Celo, billed at provision time for a fixed block.",
 	}, deps.ProvisionEnv)
 
 	gomcp.AddTool(server, &gomcp.Tool{
@@ -55,16 +59,46 @@ func main() {
 		Description: "End a session immediately.",
 	}, deps.Release)
 
-	// Streamable HTTP transport — confirmed API from
-	// github.com/modelcontextprotocol/go-sdk. This is what makes the
-	// service network-callable (and therefore deployable to the cloud)
-	// rather than a stdio-only local subprocess.
-	handler := gomcp.NewStreamableHTTPHandler(func(r *http.Request) *gomcp.Server {
+	mcpHandler := gomcp.NewStreamableHTTPHandler(func(r *http.Request) *gomcp.Server {
 		return server
 	}, nil)
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/agent-card.json", agentcard.Handler(cfg))
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.Header.Get("Mcp-Session-Id") == "" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name":        "Compute Router",
+				"description": "MCP server for paid, short-lived compute sandboxes.",
+				"protocol":    "MCP Streamable HTTP",
+				"endpoint":    "/mcp",
+				"agent_card":  "/.well-known/agent-card.json",
+				"usage":       "POST JSON-RPC initialize to start an MCP session.",
+			})
+			return
+		}
+		mcpHandler.ServeHTTP(w, r)
+	})
+	mux.Handle("/", http.FileServer(http.Dir("./web")))
+
 	log.Printf("compute-router listening on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
 		log.Fatal(err)
 	}
+
+}
+
+func mustRefundSender(cfg *config.Config) *refunds.Sender {
+	if cfg.RefundOperatorPrivateKey == "" {
+		log.Fatal("refund configuration error: REFUND_OPERATOR_PRIVATE_KEY is required")
+	}
+	sender, err := refunds.NewSender(cfg.CeloRPCURL, cfg.RefundOperatorPrivateKey, cfg.PayoutWallet, cfg.CeloChainID)
+	if err != nil || sender == nil {
+		if err == nil {
+			err = fmt.Errorf("refund sender is nil")
+		}
+		log.Fatalf("refund configuration error: %v", err)
+	}
+	return sender
 }

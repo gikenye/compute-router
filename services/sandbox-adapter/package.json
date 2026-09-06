@@ -8,9 +8,10 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@cloudflare/sandbox": "latest"
+    "@cloudflare/sandbox": "0.7.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "latest",
     "wrangler": "latest",
     "typescript": "latest"
   }

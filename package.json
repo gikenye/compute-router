@@ -1,0 +1,19 @@
+{
+  "name": "compute-router-tools",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Root-level tooling for compute-router — ERC-8004 registration script.",
+  "scripts": {
+    "register": "tsx 8004-register.ts"
+  },
+  "dependencies": {
+    "viem": "2.36.0"
+  },
+  "devDependencies": {
+    "tsx": "4.19.2",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

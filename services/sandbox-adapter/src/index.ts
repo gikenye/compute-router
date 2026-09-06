@@ -1,21 +1,10 @@
-// Deliberately dumb. This Worker's entire job: expose /boot, /exec,
-// /destroy over plain internal HTTP, wrapping @cloudflare/sandbox.
-// No pricing, payment, or session-lease logic belongs here — that all
-// lives in services/core (Go). See /docs/ADR-001-language-choice.md.
-//
-// NOTE on templates: Cloudflare fixes the container image at Worker
-// deploy time (see wrangler.jsonc `containers[0].image`) — it is NOT
-// selectable per-request. This MVP ships one image ("node-build").
-// The `template` field on /boot is accepted and stored but currently
-// has no effect; true multi-template support needs multiple registered
-// container classes, each with its own Durable Object binding — a
-// real roadmap item, not implemented here.
+// This Worker exposes the sandbox adapter's internal HTTP API.
 
 import { getSandbox } from "@cloudflare/sandbox";
 export { Sandbox } from "@cloudflare/sandbox";
 
 interface Env {
-  Sandbox: DurableObjectNamespace;
+  Sandbox: any;
   ADAPTER_SHARED_SECRET: string;
 }
 
@@ -41,18 +30,7 @@ export default {
           return new Response(JSON.stringify({ error: "session_id required" }), { status: 400 });
         }
 
-        // getSandbox with RPC transport (required — see wrangler.jsonc).
-        // [UNCONFIRMED]: createSession() is documented as the
-        // forward-compatible pattern over the implicit default session,
-        // but the exact chained call shape below (getSandbox ->
-        // createSession -> session.exec) was not independently
-        // confirmed against a live API reference during this build.
-        // Verify against https://developers.cloudflare.com/sandbox/api/
-        // before relying on it — if createSession() doesn't exist on
-        // the version you install, fall back to
-        // getSandbox(env.Sandbox, session_id, { transport: "rpc" })
-        // and call .exec() directly on that object instead.
-        const sandbox = getSandbox(env.Sandbox, session_id, { transport: "rpc" });
+        const sandbox = getSandbox(env.Sandbox as any, session_id);
         // Touch the sandbox once so the container actually boots here
         // rather than lazily on first /exec — makes boot latency visible
         // to the caller instead of hidden inside the first exec() call.
@@ -70,7 +48,7 @@ export default {
         if (!session_id || !command) {
           return new Response(JSON.stringify({ error: "session_id and command required" }), { status: 400 });
         }
-        const sandbox = getSandbox(env.Sandbox, session_id, { transport: "rpc" });
+        const sandbox = getSandbox(env.Sandbox, session_id);
         const result = await sandbox.exec(command);
         return Response.json({
           stdout: result.stdout ?? "",
@@ -85,19 +63,15 @@ export default {
     if (url.pathname === "/destroy" && request.method === "POST") {
       try {
         const { session_id } = await request.json<{ session_id: string }>();
-        // [UNCONFIRMED]: no explicit destroy method was confirmed
-        // against current docs during this build — Sandbox SDK's own
-        // idle timeout is the documented backstop (see SPEC-100 §5.3).
-        // This best-effort call is defensive; if the method name is
-        // wrong it fails silently and idle-timeout still cleans up.
-        const sandbox: any = getSandbox(env.Sandbox, session_id, { transport: "rpc" });
+        // Explicit destruction is preferred; the SDK also reclaims idle
+        // sandboxes through its configured inactivity timeout.
+        const sandbox: any = getSandbox(env.Sandbox, session_id);
         if (typeof sandbox.destroy === "function") {
           await sandbox.destroy();
         }
         return Response.json({ destroyed: true });
       } catch (err: any) {
-        // Non-fatal — idle timeout is the real backstop.
-        return Response.json({ destroyed: false, note: String(err?.message ?? err) });
+        return Response.json({ destroyed: false, error: String(err?.message ?? err) }, { status: 500 });
       }
     }
 

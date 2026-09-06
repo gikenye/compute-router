@@ -1,22 +1,9 @@
-// Package payment implements the x402 verify/settle client against a
-// Celo facilitator. See /docs/SPEC-100.md §4.
-//
-// [UNCONFIRMED, SPEC-100 §4.2]: PaymentRequirements field names below
-// (scheme/network/payTo/price.amount/price.asset/price.extra) were
-// reconstructed from docs.celo.org's x402 build guide during design —
-// NOT from a full OpenAPI spec. Confirm against
-// GET {FACILITATOR_URL}/supported before trusting this in production;
-// the struct tags are your single point of correction if the real
-// schema differs.
-//
-// MVP settlement design: fixed-price "exact" scheme, full block price
-// settled at provision time (SPEC-100 §4.4 fallback path). The "upto"
-// metered-settlement scheme is a stretch goal, not implemented here —
-// see the TODO at the bottom of this file.
+// Package payment implements the x402 client for the Celo facilitator.
 package payment
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,16 +11,46 @@ import (
 )
 
 type Price struct {
-	Amount string            `json:"amount"` // smallest units, as a string — e.g. USDC 6 decimals: "20000" = $0.02
-	Asset  string            `json:"asset"`  // token contract address
+	Amount string            `json:"amount"`
+	Asset  string            `json:"asset"`
 	Extra  map[string]string `json:"extra,omitempty"`
 }
 
+type Stablecoin struct {
+	Symbol   string
+	Address  string
+	Decimals int
+	Name     string
+	Version  string
+}
+
 type PaymentRequirements struct {
-	Scheme  string `json:"scheme"`  // "exact" for MVP
-	Network string `json:"network"` // CAIP-2, e.g. "eip155:11142220" for Celo Sepolia
+	Scheme  string `json:"scheme"`
+	Network string `json:"network"`
 	PayTo   string `json:"payTo"`
 	Price   Price  `json:"price"`
+}
+
+type facilitatorRequirements struct {
+	Scheme            string            `json:"scheme"`
+	Network           string            `json:"network"`
+	Asset             string            `json:"asset"`
+	PayTo             string            `json:"payTo"`
+	Amount            string            `json:"amount"`
+	MaxTimeoutSeconds int               `json:"maxTimeoutSeconds"`
+	Extra             map[string]string `json:"extra,omitempty"`
+}
+
+func (r PaymentRequirements) facilitatorFormat() facilitatorRequirements {
+	return facilitatorRequirements{
+		Scheme:            r.Scheme,
+		Network:           r.Network,
+		Asset:             r.Price.Asset,
+		PayTo:             r.PayTo,
+		Amount:            r.Price.Amount,
+		MaxTimeoutSeconds: 300,
+		Extra:             r.Price.Extra,
+	}
 }
 
 type Client struct {
@@ -50,24 +67,33 @@ func New(facilitatorURL, apiKey string) *Client {
 	}
 }
 
-// DollarsToUSDCBaseUnits converts a dollar amount to USDC's 6-decimal
-// base-unit string. e.g. 0.02 -> "20000".
 func DollarsToUSDCBaseUnits(dollars float64) string {
-	return fmt.Sprintf("%d", int64(dollars*1_000_000))
+	return DollarsToBaseUnits(dollars, 6)
+}
+
+func DollarsToBaseUnits(dollars float64, decimals int) string {
+	multiplier := 1.0
+	for i := 0; i < decimals; i++ {
+		multiplier *= 10
+	}
+	return fmt.Sprintf("%d", int64(dollars*multiplier))
 }
 
 type verifyResponse struct {
-	Valid bool   `json:"valid"`
-	Error string `json:"error,omitempty"`
+	Valid        bool   `json:"isValid"`
+	Error        string `json:"invalidReason,omitempty"`
+	ErrorDetails string `json:"invalidReasonDetails,omitempty"`
 }
 
-// Verify checks a signed payment payload against the facilitator's
-// /verify endpoint. Does NOT require the API key per Celo's docs.
 func (c *Client) Verify(paymentData string, req PaymentRequirements) (bool, error) {
+	payload, err := decodePayment(paymentData)
+	if err != nil {
+		return false, err
+	}
 	body, err := json.Marshal(map[string]any{
-		"payment":    paymentData,
-		"network":    req.Network,
-		"paymentRequirements": req,
+		"x402Version":         2,
+		"paymentPayload":      payload,
+		"paymentRequirements": req.facilitatorFormat(),
 	})
 	if err != nil {
 		return false, err
@@ -91,25 +117,56 @@ func (c *Client) Verify(paymentData string, req PaymentRequirements) (bool, erro
 		return false, fmt.Errorf("unexpected /verify response shape: %s", string(respBody))
 	}
 	if !vr.Valid {
-		return false, fmt.Errorf("payment invalid: %s", vr.Error)
+		return false, fmt.Errorf("payment invalid: %s (%s)", vr.Error, vr.ErrorDetails)
 	}
 	return true, nil
 }
 
 type settleResponse struct {
-	Settled bool   `json:"settled"`
-	TxHash  string `json:"txHash,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Success     bool   `json:"success"`
+	Transaction string `json:"transaction,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
-// Settle submits the payment for on-chain settlement. Requires the
-// X-API-Key header — this is a server-side secret, never forward it to
-// any client-facing response.
+// SettlementError carries the outcome of a failed settlement.
+//
+// Confirmed is true only when the facilitator provides evidence that the
+// transaction was not submitted to the network (e.g. "invalid_payment",
+// "insufficient_funds").  It is false for transient or ambiguous outcomes
+// such as "settlement_pending", network timeouts, or unknown error strings,
+// so callers can route those to manual review rather than auto-refund.
+type SettlementError struct {
+	Confirmed bool   // true => facilitator confirmed no value captured; safe to refund
+	TxHash    string // non-empty when the facilitator reported a transaction hash
+	Err       error
+}
+
+func (e *SettlementError) Error() string { return e.Err.Error() }
+func (e *SettlementError) Unwrap() error { return e.Err }
+
+// finalNonSubmissionErrors is the set of facilitator error reasons that
+// conclusively prove the payment was never submitted on-chain.  All other
+// error strings (including "settlement_pending") are treated as ambiguous.
+var finalNonSubmissionErrors = map[string]bool{
+	"invalid_payment":    true,
+	"insufficient_funds": true,
+	"invalid_scheme":     true,
+	"invalid_network":    true,
+	"invalid_asset":      true,
+	"invalid_amount":     true,
+	"payment_expired":    true,
+	"already_settled":    true, // duplicate — value was captured; route to review
+}
+
 func (c *Client) Settle(paymentData string, req PaymentRequirements) (settled bool, txHash string, err error) {
+	payload, err := decodePayment(paymentData)
+	if err != nil {
+		return false, "", err
+	}
 	body, err := json.Marshal(map[string]any{
-		"payment":             paymentData,
-		"network":             req.Network,
-		"paymentRequirements": req,
+		"x402Version":         2,
+		"paymentPayload":      payload,
+		"paymentRequirements": req.facilitatorFormat(),
 	})
 	if err != nil {
 		return false, "", err
@@ -137,15 +194,32 @@ func (c *Client) Settle(paymentData string, req PaymentRequirements) (settled bo
 	if err := json.Unmarshal(respBody, &sr); err != nil {
 		return false, "", fmt.Errorf("unexpected /settle response shape: %s", string(respBody))
 	}
-	if !sr.Settled {
-		return false, "", fmt.Errorf("settlement failed: %s", sr.Error)
+	if !sr.Success {
+		// Preserve a non-empty transaction hash so callers can record it for review.
+		reportedTx := sr.Transaction
+
+		// "settlement_pending" and any unrecognised reason are ambiguous: the
+		// transaction may be in-flight.  Only set Confirmed=true for reasons
+		// that prove the payment was never submitted to the chain.
+		confirmed := finalNonSubmissionErrors[sr.Error]
+
+		return false, reportedTx, &SettlementError{
+			Confirmed: confirmed,
+			TxHash:    reportedTx,
+			Err:       fmt.Errorf("settlement failed: %s", sr.Error),
+		}
 	}
-	return true, sr.TxHash, nil
+	return true, sr.Transaction, nil
 }
 
-// TODO (SPEC-100 §4.4, stretch goal): metered "upto" settlement — call
-// Settle() multiple times against the same paymentData as usage
-// accrues, rather than once at full block price. Requires confirming
-// which facilitator actually supports "upto" (Celo's own hosted one
-// hedges on this; thirdweb's confirms it) before switching Scheme away
-// from "exact" above.
+func decodePayment(paymentData string) (map[string]any, error) {
+	raw, err := base64.StdEncoding.DecodeString(paymentData)
+	if err != nil {
+		return nil, fmt.Errorf("payment_data is not valid base64: %w", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("payment_data is not valid JSON: %w", err)
+	}
+	return payload, nil
+}
