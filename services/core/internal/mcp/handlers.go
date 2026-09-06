@@ -36,10 +36,15 @@ func newSessionID() string {
 	return fmt.Sprintf("%x", b)
 }
 
-func paymentRequiredResult(reqs payment.PaymentRequirements) (*gomcp.CallToolResult, error) {
+func paymentRequiredResult(reqs []payment.PaymentRequirements) (*gomcp.CallToolResult, error) {
+	accepts := make([]map[string]any, 0, len(reqs))
+	for _, req := range reqs {
+		accepts = append(accepts, req.NegotiationFormat())
+	}
 	payload, err := json.Marshal(map[string]any{
-		"error":                "payment_required",
-		"payment_requirements": reqs,
+		"error":       "payment_required",
+		"x402Version": 2,
+		"accepts":     accepts,
 	})
 	if err != nil {
 		return nil, err
@@ -50,8 +55,11 @@ func paymentRequiredResult(reqs payment.PaymentRequirements) (*gomcp.CallToolRes
 	}, nil
 }
 
-func (d *Deps) buildRequirements(priceUSD float64) payment.PaymentRequirements {
-	return d.buildRequirementsFor(priceUSD, "USDC")
+func (d *Deps) buildPaymentOptions(priceUSD float64) []payment.PaymentRequirements {
+	return []payment.PaymentRequirements{
+		d.buildRequirementsFor(priceUSD, "USDC"),
+		d.buildRequirementsFor(priceUSD, "USDT"),
+	}
 }
 
 func (d *Deps) buildRequirementsFor(priceUSD float64, symbol string) payment.PaymentRequirements {
@@ -99,7 +107,7 @@ func (d *Deps) ProvisionEnv(ctx context.Context, req *gomcp.CallToolRequest, in 
 	reqs := d.buildRequirementsFor(priceUSD, paymentAsset)
 
 	if in.PaymentData == "" {
-		result, err := paymentRequiredResult(reqs)
+		result, err := paymentRequiredResult(d.buildPaymentOptions(priceUSD))
 		return result, ProvisionEnvOutput{}, err
 	}
 
@@ -216,7 +224,7 @@ func (d *Deps) ExtendCeiling(ctx context.Context, req *gomcp.CallToolRequest, in
 	}
 	reqs := d.buildRequirementsFor(in.AdditionalUSD, paymentAsset)
 	if in.PaymentData == "" {
-		result, err := paymentRequiredResult(reqs)
+		result, err := paymentRequiredResult(d.buildPaymentOptions(in.AdditionalUSD))
 		return result, ExtendCeilingOutput{}, err
 	}
 

@@ -11,7 +11,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const agentURI =
   process.env.AGENT_URI ??
-  "https://computerouter.wtf/.well-known/agent.json";
+  "https://www.computerouter.wtf/.well-known/agent-card.json";
 const rpcURL = process.env.CELO_RPC_URL ?? "https://forno.celo.org";
 const privateKey = process.env.AGENT_OPERATOR_PRIVATE_KEY;
 
