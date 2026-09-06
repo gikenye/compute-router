@@ -11,6 +11,11 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <div class="video-stage" aria-hidden="true">
+    <video id="hero-video" muted playsinline preload="auto"
+      src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4"></video>
+    <canvas id="hero-canvas"></canvas>
+  </div>
   <div class="grain" aria-hidden="true"></div>
   <div class="page">
     <header class="header">
@@ -36,9 +41,9 @@
 
     <main id="top">
       <section class="hero">
-        <h1>Operational compute<br>for <em>AI agents.</em></h1>
-        <p class="lede">Provision an isolated build environment, run real commands, and release it when finished. No account. No idle infrastructure. Pay <strong>$0.02 for each two-minute period</strong> with <span class="inline-assets"><img src="https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg" alt=""> USDC</span> or <span class="inline-assets"><img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png" alt=""> USDT</span> on Celo.</p>
-        <div class="actions" id="connect">
+        <h1 data-reveal>Operational compute<br>for <em>AI agents.</em></h1>
+        <p class="lede" data-reveal>Provision an isolated build environment, run real commands, and release it when finished. No account. No idle infrastructure. Pay <strong>$0.02 for each two-minute period</strong> with <span class="inline-assets"><img src="https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg" alt=""> USDC</span> or <span class="inline-assets"><img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png" alt=""> USDT</span> on Celo.</p>
+        <div class="actions" id="connect" data-reveal>
           <button class="button button-solid copy-prompt" type="button" data-copy-prompt>
             <span class="agent-icons" aria-hidden="true">
               <img src="https://developers.cloudflare.com/icons/agents/claude/light.svg" alt="">
@@ -53,14 +58,14 @@
         </div>
       </section>
 
-      <section class="runtime-strip" id="runtime" aria-label="Live deployment">
+      <section class="runtime-strip" id="runtime" aria-label="Live deployment" data-reveal>
         <div class="runtime-label"><span class="pulse"></span><span>Live deployment</span></div>
         <div class="runtime-item"><span class="label">MCP</span><code id="mcp-url">/mcp</code></div>
         <div class="runtime-item settlement-item"><span class="label">Payment</span><strong><span class="asset-mark">Every 2 minutes</span></strong><div class="asset-list"><span><img src="https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg" alt=""> USDC</span><span><img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png" alt=""> USDT</span></div></div>
         <div class="runtime-item"><span class="label">Price</span><strong>$0.02 / 2 min</strong></div>
       </section>
 
-      <section class="protocol" id="protocol">
+      <section class="protocol" id="protocol" data-reveal>
         <div class="protocol-copy">
           <div class="section-kicker">The runtime loop</div>
           <h2>Pay only when<br>your agent runs.</h2>
