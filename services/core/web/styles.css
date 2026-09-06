@@ -57,6 +57,11 @@ h1 em { font-family:"Instrument Serif",Georgia,serif; font-weight:400; color:var
 .label { color:#666; text-transform:uppercase; letter-spacing:.1em; font-size:9px; font-weight:600; }
 .runtime-item strong, .runtime-item code { color:#ddd; font-size:12px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .runtime-item code { color:var(--blue); font-family:ui-monospace,monospace; }
+.mcp-address { display:flex; align-items:center; gap:8px; min-width:0; }
+.mcp-address a { color:var(--blue); font:12px ui-monospace,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:underline; text-underline-offset:3px; }
+.mcp-address a:hover { color:#fff; }
+.copy-url { border:1px solid var(--border); border-radius:4px; background:var(--soft); color:#aaa; padding:3px 6px; font:10px ui-monospace,monospace; flex:0 0 auto; }
+.copy-url:hover { border-color:#fff; color:#fff; }
 .asset-mark, .asset-list span { display:inline-flex; align-items:center; gap:6px; }
 .asset-mark img, .asset-list img { width:15px; height:15px; object-fit:contain; border-radius:50%; vertical-align:middle; }
 .asset-list { display:flex; gap:10px; color:#888; font:10px ui-monospace,monospace; }

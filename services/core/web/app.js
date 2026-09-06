@@ -28,6 +28,7 @@ function setupScrollVideo() {
   let cacheReleased = false;
   let frames = [];
   let lastFrameIndex = -1;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const drawCover = (source, sourceWidth, sourceHeight) => {
     const width = window.innerWidth;
@@ -81,10 +82,15 @@ function setupScrollVideo() {
   };
 
   const tick = () => {
-    progress += (target - progress) * .12;
+    if (reducedMotion.matches) {
+      target = 0;
+      progress = 0;
+    } else {
+      progress = target;
+    }
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.duration) {
       const nextTime = progress * Math.max(0, video.duration - .05);
-      if (!cacheReady && !seeking && Math.abs(video.currentTime - nextTime) > .04) {
+      if (!reducedMotion.matches && !cacheReady && Math.abs(video.currentTime - nextTime) > .04) {
         seeking = true;
         video.currentTime = nextTime;
       }
@@ -99,7 +105,12 @@ function setupScrollVideo() {
 
   const extractFrames = async () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    if (cacheReleased || !video.duration || !("createImageBitmap" in window)) return;
+    if (
+      cacheReleased ||
+      !video.duration ||
+      !("createImageBitmap" in window) ||
+      !("OffscreenCanvas" in window)
+    ) return;
     const offscreen = document.createElement("video");
     offscreen.muted = true;
     offscreen.preload = "auto";
@@ -114,8 +125,8 @@ function setupScrollVideo() {
         offscreen.addEventListener("error", reject, { once: true });
       });
     }
-    const count = Math.min(60, Math.max(24, Math.ceil(offscreen.duration * 12)));
-    const ratio = Math.min(1, 720 / offscreen.videoWidth);
+    const count = Math.min(45, Math.max(24, Math.ceil(offscreen.duration * 8)));
+    const ratio = Math.min(1, 640 / offscreen.videoWidth);
     for (let index = 0; index < count; index += 1) {
       if (cacheReleased) return;
       await new Promise((resolve) => {
@@ -161,19 +172,16 @@ function setupScrollVideo() {
     });
   };
 
-  const hero = document.querySelector(".hero");
-  if (hero && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting || cacheReleased) return;
-      cacheReleased = true;
-      frames.forEach((frame) => frame.close());
-      frames = [];
-      cacheReady = false;
-      lastFrameIndex = -1;
-      stage.classList.remove("cache-ready");
-    });
-    observer.observe(hero);
-  }
+  const releaseCache = () => {
+    if (cacheReleased) return;
+    cacheReleased = true;
+    frames.forEach((frame) => frame.close());
+    frames = [];
+    cacheReady = false;
+    lastFrameIndex = -1;
+    stage.classList.remove("cache-ready");
+  };
+  window.addEventListener("pagehide", releaseCache, { once: true });
 
   video.addEventListener("loadeddata", onLoadedData, { once: true });
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) onLoadedData();
@@ -219,7 +227,22 @@ function renderTerminal() {
 
 function renderMcpUrl() {
   const target = document.getElementById("mcp-url");
-  if (target) target.textContent = `${publicMcpOrigin}/mcp`;
+  if (target) {
+    target.textContent = `${publicMcpOrigin}/mcp`;
+    target.href = `${publicMcpOrigin}/mcp`;
+  }
+}
+
+async function copyMcpUrl(button) {
+  const url = `${publicMcpOrigin}/mcp`;
+  try {
+    await navigator.clipboard.writeText(url);
+    button.textContent = "Copied";
+    window.setTimeout(() => { button.textContent = "Copy"; }, 1600);
+  } catch {
+    button.textContent = "Copy failed";
+    window.setTimeout(() => { button.textContent = "Copy"; }, 1600);
+  }
 }
 
 function getAgentPrompt() {
@@ -269,5 +292,8 @@ document.addEventListener("DOMContentLoaded", () => {
   renderMcpUrl();
   document.querySelectorAll("[data-copy-prompt]").forEach((button) => {
     button.addEventListener("click", () => copyPrompt(button));
+  });
+  document.querySelectorAll("[data-copy-mcp]").forEach((button) => {
+    button.addEventListener("click", () => copyMcpUrl(button));
   });
 });
