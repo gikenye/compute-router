@@ -2,15 +2,15 @@
   "type": "Agent",
   "name": "Compute Router",
   "description": "Agent-native metered compute sandbox for AI agents on Celo, using x402 and Cloudflare Sandbox for disposable shells with preinstalled build tools.",
-  "image": "https://compute-router-two.vercel.app/og.png",
+  "image": "https://computerouter.wtf/og.png",
   "endpoints": [
     {
       "type": "a2a",
-      "url": "https://compute-router-two.vercel.app/.well-known/agent.json"
+      "url": "https://computerouter.wtf/.well-known/agent.json"
     },
     {
       "type": "mcp",
-      "url": "https://compute-router-two.vercel.app/mcp"
+      "url": "https://mcp.computerouter.wtf/mcp"
     },
     {
       "type": "wallet",
@@ -20,4 +20,3 @@
   ],
   "supportedTrust": ["reputation", "validation", "tee"]
 }
-

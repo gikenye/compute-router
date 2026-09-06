@@ -10,7 +10,7 @@ const lines = [
   ["→ settled · environment destroyed", "green"],
 ];
 
-const publicMcpOrigin = "https://compute-router-app.fly.dev";
+const publicMcpOrigin = "https://mcp.computerouter.wtf";
 
 function renderTerminal() {
   const target = document.getElementById("terminal-body");
