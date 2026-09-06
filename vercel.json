@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/.well-known/agent-card.json",
+      "destination": "https://mcp.computerouter.wtf/.well-known/agent-card.json"
+    },
+    {
+      "source": "/.well-known/agent.json",
+      "destination": "https://mcp.computerouter.wtf/.well-known/agent-card.json"
+    },
+    {
+      "source": "/mcp",
+      "destination": "https://mcp.computerouter.wtf/mcp"
+    }
+  ]
+}

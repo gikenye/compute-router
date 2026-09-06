@@ -31,6 +31,20 @@ type PaymentRequirements struct {
 	Price   Price  `json:"price"`
 }
 
+// NegotiationFormat returns the x402 v2 PaymentRequirements shape exposed to
+// clients. The nested Price form remains the internal service representation.
+func (r PaymentRequirements) NegotiationFormat() map[string]any {
+	return map[string]any{
+		"scheme":            r.Scheme,
+		"network":           r.Network,
+		"asset":             r.Price.Asset,
+		"payTo":             r.PayTo,
+		"amount":            r.Price.Amount,
+		"maxTimeoutSeconds": 300,
+		"extra":             r.Price.Extra,
+	}
+}
+
 type facilitatorRequirements struct {
 	Scheme            string            `json:"scheme"`
 	Network           string            `json:"network"`
