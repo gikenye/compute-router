@@ -1,6 +1,6 @@
 # Compute Router
 
-Agent-native, metered compute sandboxes — provisioned, executed, and
+Agent-native, metered compute sandboxes; provisioned, executed, and
 paid for entirely over MCP, settled in USDC on Celo via x402.
 
 Built for the Celo "Agents at Work" Hackathon.
@@ -21,10 +21,6 @@ session over x402, and the session runs on Cloudflare's Sandbox SDK.
 - `services/sandbox-adapter` — a thin Cloudflare Worker wrapping
   `@cloudflare/sandbox` for the actual compute (TypeScript)
 
-Two languages by design, not convenience: the Cloudflare Sandbox SDK is
-unavoidably tied to the Workers runtime, so it's isolated behind a
-narrow adapter boundary rather than dictating the language of the rest
-of the system.
 
 ## Agent identity
 
@@ -47,4 +43,4 @@ cd services/sandbox-adapter && npx wrangler dev
 
 ## License
 
-TBD.
+MIT 
