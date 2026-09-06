@@ -5,7 +5,7 @@ app = "compute-router-app"
 primary_region = "iad"
 
 [build]
-  dockerfile = "services/core/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
