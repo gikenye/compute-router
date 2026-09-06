@@ -13,6 +13,7 @@ body { background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans
 .video-stage.is-ready #hero-canvas { opacity:.72; }
 .video-stage.is-ready #hero-video { opacity:0; }
 .video-stage.canvas-unavailable #hero-canvas { display:none; }
+.video-stage.canvas-unavailable #hero-video { opacity:.76; }
 .video-spacer { height:80vh; }
 a { color:inherit; text-decoration:none; }
 button { font-family:inherit; }

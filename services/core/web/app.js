@@ -25,6 +25,7 @@ function setupScrollVideo() {
   let canvasDisabled = false;
   let seeking = false;
   let cacheReady = false;
+  let cacheReleased = false;
   let frames = [];
   let lastFrameIndex = -1;
 
@@ -44,6 +45,7 @@ function setupScrollVideo() {
     canvas.width = Math.max(1, Math.round(window.innerWidth * dpr));
     canvas.height = Math.max(1, Math.round(window.innerHeight * dpr));
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lastFrameIndex = -1;
   };
 
   const draw = () => {
@@ -55,9 +57,11 @@ function setupScrollVideo() {
         if (index !== lastFrameIndex) {
           drawCover(frames[index], frames[index].width, frames[index].height);
           lastFrameIndex = index;
+          stage.classList.add("is-ready");
         }
       } else if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         drawCover(video, video.videoWidth, video.videoHeight);
+        stage.classList.add("is-ready");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
@@ -67,7 +71,6 @@ function setupScrollVideo() {
       }
       throw error;
     }
-    stage.classList.add("is-ready");
   };
 
   const requestDraw = () => {
@@ -96,7 +99,7 @@ function setupScrollVideo() {
 
   const extractFrames = async () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    if (!video.duration || !("createImageBitmap" in window)) return;
+    if (cacheReleased || !video.duration || !("createImageBitmap" in window)) return;
     const offscreen = document.createElement("video");
     offscreen.muted = true;
     offscreen.preload = "auto";
@@ -111,14 +114,19 @@ function setupScrollVideo() {
         offscreen.addEventListener("error", reject, { once: true });
       });
     }
-    const count = Math.min(90, Math.max(24, Math.ceil(offscreen.duration * 12)));
-    const ratio = Math.min(1, 960 / offscreen.videoWidth);
+    const count = Math.min(60, Math.max(24, Math.ceil(offscreen.duration * 12)));
+    const ratio = Math.min(1, 720 / offscreen.videoWidth);
     for (let index = 0; index < count; index += 1) {
+      if (cacheReleased) return;
       await new Promise((resolve) => {
         offscreen.addEventListener("seeked", resolve, { once: true });
         offscreen.currentTime = (index / (count - 1)) * Math.max(0, offscreen.duration - .05);
       });
       const bitmap = await createImageBitmap(offscreen);
+      if (cacheReleased) {
+        bitmap.close();
+        return;
+      }
       if (ratio < 1) {
         const resized = new OffscreenCanvas(
           Math.max(1, Math.round(offscreen.videoWidth * ratio)),
@@ -128,7 +136,12 @@ function setupScrollVideo() {
         if (!resizedContext) throw new Error("Unable to resize cached video frame");
         resizedContext.drawImage(bitmap, 0, 0, resized.width, resized.height);
         bitmap.close();
-        frames.push(await createImageBitmap(resized));
+        const resizedBitmap = await createImageBitmap(resized);
+        if (cacheReleased) {
+          resizedBitmap.close();
+          return;
+        }
+        frames.push(resizedBitmap);
       } else {
         frames.push(bitmap);
       }
@@ -147,6 +160,21 @@ function setupScrollVideo() {
       frames = [];
     });
   };
+
+  const hero = document.querySelector(".hero");
+  if (hero && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting || cacheReleased) return;
+      cacheReleased = true;
+      frames.forEach((frame) => frame.close());
+      frames = [];
+      cacheReady = false;
+      lastFrameIndex = -1;
+      stage.classList.remove("cache-ready");
+    });
+    observer.observe(hero);
+  }
+
   video.addEventListener("loadeddata", onLoadedData, { once: true });
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) onLoadedData();
   video.addEventListener("seeked", () => {
