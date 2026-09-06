@@ -22,8 +22,22 @@ function setupScrollVideo() {
   let target = 0;
   let progress = 0;
   let frameRequested = false;
-  let hasFrame = false;
   let canvasDisabled = false;
+  let seeking = false;
+  let cacheReady = false;
+  let frames = [];
+  let lastFrameIndex = -1;
+
+  const drawCover = (source, sourceWidth, sourceHeight) => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const scale = Math.max(width / sourceWidth, height / sourceHeight);
+    const drawWidth = sourceWidth * scale;
+    const drawHeight = sourceHeight * scale;
+    context.fillStyle = "#0a0a0a";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(source, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  };
 
   const resize = () => {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -35,15 +49,16 @@ function setupScrollVideo() {
   const draw = () => {
     frameRequested = false;
     if (canvasDisabled) return;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const scale = Math.max(width / video.videoWidth, height / video.videoHeight);
-    const drawWidth = video.videoWidth * scale;
-    const drawHeight = video.videoHeight * scale;
-    context.fillStyle = "#0a0a0a";
-    context.fillRect(0, 0, width, height);
     try {
-      context.drawImage(video, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+      if (cacheReady && frames.length) {
+        const index = Math.min(frames.length - 1, Math.floor(progress * (frames.length - 1)));
+        if (index !== lastFrameIndex) {
+          drawCover(frames[index], frames[index].width, frames[index].height);
+          lastFrameIndex = index;
+        }
+      } else if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        drawCover(video, video.videoWidth, video.videoHeight);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
         canvasDisabled = true;
@@ -52,10 +67,7 @@ function setupScrollVideo() {
       }
       throw error;
     }
-    if (!hasFrame) {
-      hasFrame = true;
-      stage.classList.add("is-ready");
-    }
+    stage.classList.add("is-ready");
   };
 
   const requestDraw = () => {
@@ -69,8 +81,11 @@ function setupScrollVideo() {
     progress += (target - progress) * .12;
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.duration) {
       const nextTime = progress * Math.max(0, video.duration - .05);
-      if (Math.abs(video.currentTime - nextTime) > .04) video.currentTime = nextTime;
-      if (!canvasDisabled && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) requestDraw();
+      if (!cacheReady && !seeking && Math.abs(video.currentTime - nextTime) > .04) {
+        seeking = true;
+        video.currentTime = nextTime;
+      }
+      if (!canvasDisabled && (cacheReady || video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)) requestDraw();
     }
     requestAnimationFrame(tick);
   };
@@ -79,8 +94,65 @@ function setupScrollVideo() {
     target = Math.min(1, Math.max(0, window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight)));
   };
 
-  video.addEventListener("loadeddata", requestDraw, { once: true });
-  video.addEventListener("seeked", requestDraw);
+  const extractFrames = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!video.duration || !("createImageBitmap" in window)) return;
+    const offscreen = document.createElement("video");
+    offscreen.muted = true;
+    offscreen.preload = "auto";
+    offscreen.src = video.currentSrc;
+    await new Promise((resolve, reject) => {
+      offscreen.addEventListener("loadedmetadata", resolve, { once: true });
+      offscreen.addEventListener("error", reject, { once: true });
+    });
+    if (offscreen.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await new Promise((resolve, reject) => {
+        offscreen.addEventListener("loadeddata", resolve, { once: true });
+        offscreen.addEventListener("error", reject, { once: true });
+      });
+    }
+    const count = Math.min(90, Math.max(24, Math.ceil(offscreen.duration * 12)));
+    const ratio = Math.min(1, 960 / offscreen.videoWidth);
+    for (let index = 0; index < count; index += 1) {
+      await new Promise((resolve) => {
+        offscreen.addEventListener("seeked", resolve, { once: true });
+        offscreen.currentTime = (index / (count - 1)) * Math.max(0, offscreen.duration - .05);
+      });
+      const bitmap = await createImageBitmap(offscreen);
+      if (ratio < 1) {
+        const resized = new OffscreenCanvas(
+          Math.max(1, Math.round(offscreen.videoWidth * ratio)),
+          Math.max(1, Math.round(offscreen.videoHeight * ratio)),
+        );
+        const resizedContext = resized.getContext("2d");
+        if (!resizedContext) throw new Error("Unable to resize cached video frame");
+        resizedContext.drawImage(bitmap, 0, 0, resized.width, resized.height);
+        bitmap.close();
+        frames.push(await createImageBitmap(resized));
+      } else {
+        frames.push(bitmap);
+      }
+    }
+    cacheReady = true;
+    stage.classList.add("cache-ready");
+    stage.classList.add("video-ready");
+    requestDraw();
+  };
+
+  const onLoadedData = () => {
+    stage.classList.add("video-ready");
+    requestDraw();
+    extractFrames().catch(() => {
+      frames.forEach((frame) => frame.close());
+      frames = [];
+    });
+  };
+  video.addEventListener("loadeddata", onLoadedData, { once: true });
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) onLoadedData();
+  video.addEventListener("seeked", () => {
+    seeking = false;
+    requestDraw();
+  });
   window.addEventListener("resize", () => { resize(); requestDraw(); });
   window.addEventListener("scroll", updateTarget, { passive: true });
   resize();
