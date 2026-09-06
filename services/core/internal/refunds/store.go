@@ -87,20 +87,93 @@ func (s *Store) record(paymentData string, asset, amount, reason, txHash, status
 }
 
 func (s *Store) Refund(ctx context.Context, paymentData, asset, amount, reason string) (Record, error) {
-	s.mu.Lock()
+	// Derive a stable idempotency ID from payment identity.
 	idSum := sha256.Sum256([]byte(paymentData + asset + amount))
 	id := "rf_" + hex.EncodeToString(idSum[:8])
+
+	// Hold the mutex while checking for an existing reservation and, if none
+	// exists, writing a pending record.  This makes the reservation atomic:
+	// a concurrent or retried call finds the pending entry and returns it
+	// rather than launching a second transfer.
+	s.mu.Lock()
 	if existing, ok := s.findLocked(id); ok {
 		s.mu.Unlock()
 		return existing, nil
 	}
-	s.mu.Unlock()
 	payer := payerFromPayment(paymentData)
-	txHash, err := s.sender.Transfer(ctx, asset, payer, amount, s.tag)
+	pendingRecord, pendingErr := s.writeLocked(Record{
+		ID:        id,
+		Status:    "pending",
+		Reason:    reason,
+		Payer:     payer,
+		Asset:     asset,
+		Amount:    amount,
+		CreatedAt: time.Now().UTC(),
+	})
+	s.mu.Unlock()
+
+	if pendingErr != nil {
+		// Could not persist the reservation; bail without transferring to
+		// avoid an un-trackable refund.
+		return Record{}, fmt.Errorf("reserve pending refund record: %w", pendingErr)
+	}
+	_ = pendingRecord
+
+	txHash, transferErr := s.sender.Transfer(ctx, asset, payer, amount, s.tag)
+	if transferErr != nil {
+		// Mark the reservation as failed so operators can investigate.
+		if _, statusErr := s.updateStatus(id, "failed", "", transferErr.Error()); statusErr != nil {
+			return pendingRecord, fmt.Errorf("refund transfer failed and ledger update failed: %v; ledger error: %w", transferErr, statusErr)
+		}
+		return Record{}, transferErr
+	}
+
+	// Reconcile the reservation to submitted with the confirmed tx hash.
+	refunded, statusErr := s.updateStatus(id, "refunded", txHash, "")
+	if statusErr != nil {
+		pendingRecord.TxHash = txHash
+		return pendingRecord, fmt.Errorf("refund submitted as %s but ledger update failed: %w", txHash, statusErr)
+	}
+	return refunded, nil
+}
+
+// writeLocked appends r to the ledger. Caller must hold s.mu.
+func (s *Store) writeLocked(r Record) (Record, error) {
+	line, err := json.Marshal(r)
 	if err != nil {
 		return Record{}, err
 	}
-	return s.record(paymentData, asset, amount, reason, txHash, "refunded")
+	if err := os.MkdirAll(filepathDir(s.path), 0o750); err != nil {
+		return Record{}, fmt.Errorf("create refund ledger directory: %w", err)
+	}
+	f, err := os.OpenFile(s.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return Record{}, fmt.Errorf("open refund ledger: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		return Record{}, fmt.Errorf("write refund ledger: %w", err)
+	}
+	return r, nil
+}
+
+// updateStatus appends an updated copy of the record identified by id.
+// Readers use the last entry with a matching ID, so appending is safe.
+func (s *Store) updateStatus(id, status, txHash, errMsg string) (Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, ok := s.findLocked(id)
+	if !ok {
+		return Record{}, fmt.Errorf("refund record %s not found for status update", id)
+	}
+	existing.Status = status
+	if txHash != "" {
+		existing.TxHash = txHash
+	}
+	if errMsg != "" {
+		existing.Reason = existing.Reason + "; " + errMsg
+	}
+	return s.writeLocked(existing)
 }
 
 func (s *Store) findLocked(id string) (Record, bool) {
@@ -108,9 +181,10 @@ func (s *Store) findLocked(id string) (Record, bool) {
 	if err != nil {
 		return Record{}, false
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
+	lines := strings.Split(string(raw), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
 		var record Record
-		if json.Unmarshal([]byte(line), &record) == nil && record.ID == id {
+		if json.Unmarshal([]byte(lines[i]), &record) == nil && record.ID == id {
 			return record, true
 		}
 	}

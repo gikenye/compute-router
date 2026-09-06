@@ -96,7 +96,7 @@ that file is the actual next steps.
 
 ## 5. Repo layout (actual, scaffolded)
 
-```
+```text
 /services                    PUBLIC — the product
   /core                       Go — MCP server (now at /mcp — see below),
                                x402, session, agent-card, optional

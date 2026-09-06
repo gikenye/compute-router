@@ -26,7 +26,7 @@ type AgentCard struct {
 
 func Build(cfg *config.Config) AgentCard {
 	endpoints := []Endpoint{
-		{Type: "wallet", Address: cfg.PayoutWallet, ChainID: 42220},
+		{Type: "wallet", Address: cfg.PayoutWallet, ChainID: int(cfg.CeloChainID)},
 	}
 	if cfg.AgentMCPPublicURL != "" {
 		endpoints = append(endpoints, Endpoint{Type: "mcp", URL: cfg.AgentMCPPublicURL})

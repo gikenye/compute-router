@@ -71,9 +71,7 @@ export default {
         }
         return Response.json({ destroyed: true });
       } catch (err: any) {
-        // Cleanup is best effort because the SDK's idle timeout is the
-        // fallback when explicit destruction cannot complete.
-        return Response.json({ destroyed: false, note: String(err?.message ?? err) });
+        return Response.json({ destroyed: false, error: String(err?.message ?? err) }, { status: 500 });
       }
     }
 

@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 )
 
@@ -69,7 +70,7 @@ func Load() (*Config, error) {
 		BlockMinutes:     envOr("BLOCK_MINUTES", "2"),
 
 		AgentName:         envOr("AGENT_NAME", "Compute Router"),
-		AgentDescription:  envOr("AGENT_DESCRIPTION", "Agent-native metered compute sandboxes, paid for in USDC on Celo via x402."),
+		AgentDescription:  envOr("AGENT_DESCRIPTION", "Agent-native metered compute sandboxes, paid for in USDC or USDT on Celo via x402."),
 		AgentImageURI:     envOr("AGENT_IMAGE_URI", ""),
 		AgentMCPPublicURL: envOr("AGENT_MCP_PUBLIC_URL", ""),
 
@@ -85,6 +86,12 @@ func Load() (*Config, error) {
 	var err error
 	if c.FacilitatorURL, err = mustEnv("X402_FACILITATOR_URL"); err != nil {
 		return nil, err
+	}
+	if c.SafetyCheckEnabled {
+		parsed, parseErr := url.Parse(c.CencoriAPIBaseURL)
+		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return nil, fmt.Errorf("CENCORI_API_BASE_URL must use HTTPS")
+		}
 	}
 	c.CeloChainID = 42220
 	if c.FacilitatorAPIKey, err = mustEnv("X402_API_KEY"); err != nil {

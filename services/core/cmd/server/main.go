@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -89,8 +90,14 @@ func main() {
 }
 
 func mustRefundSender(cfg *config.Config) *refunds.Sender {
+	if cfg.RefundOperatorPrivateKey == "" {
+		log.Fatal("refund configuration error: REFUND_OPERATOR_PRIVATE_KEY is required")
+	}
 	sender, err := refunds.NewSender(cfg.CeloRPCURL, cfg.RefundOperatorPrivateKey, cfg.PayoutWallet, cfg.CeloChainID)
-	if err != nil {
+	if err != nil || sender == nil {
+		if err == nil {
+			err = fmt.Errorf("refund sender is nil")
+		}
 		log.Fatalf("refund configuration error: %v", err)
 	}
 	return sender

@@ -1,4 +1,4 @@
-// Package mcp implements the server's tool handlers.
+// Package mcp implements the server tool handlers.
 package mcp
 
 import (
@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,10 +75,10 @@ func (d *Deps) buildRequirementsFor(priceUSD float64, symbol string) payment.Pay
 }
 
 type ProvisionEnvInput struct {
-	Template     string  `json:"template" jsonschema:"preinstalled toolchain; currently supports only \"node-build\""`
+	Template     string  `json:"template" jsonschema:"preinstalled toolchain; currently supports only node-build"`
 	CeilingUSD   float64 `json:"ceiling_usd" jsonschema:"max USDC to authorize for this session, e.g. 0.50"`
 	PaymentAsset string  `json:"payment_asset,omitempty" jsonschema:"stablecoin to use: USDC or USDT; defaults to USDC"`
-	PaymentData  string  `json:"payment_data,omitempty" jsonschema:"signed x402 payment payload — omit on first call, the tool will report payment_required, sign, and retry with this set"`
+	PaymentData  string  `json:"payment_data,omitempty" jsonschema:"signed x402 payment payload - omit on first call, the tool will report payment_required, sign, and retry with this set"`
 }
 
 type ProvisionEnvOutput struct {
@@ -115,15 +116,20 @@ func (d *Deps) ProvisionEnv(ctx context.Context, req *gomcp.CallToolRequest, in 
 	}
 	settled, txHash, err := d.Pay.Settle(in.PaymentData, reqs)
 	if err != nil || !settled {
-		_ = d.Sandbox.Destroy(sessionID)
+		// Bug fix: log destroy errors instead of silently discarding them.
+		if destroyErr := d.Sandbox.Destroy(sessionID); destroyErr != nil {
+			log.Printf("warning: sandbox destroy failed for session %s after settlement failure: %v", sessionID, destroyErr)
+		}
 		var settlementErr *payment.SettlementError
 		if errors.As(err, &settlementErr) && settlementErr.Confirmed {
+			// Confirmed=true: facilitator proved no value was captured; auto-refund.
 			review, ledgerErr := d.Refunds.Refund(ctx, in.PaymentData, reqs.Price.Asset, reqs.Price.Amount, "settlement was rejected after sandbox boot")
 			if ledgerErr != nil {
 				return nil, ProvisionEnvOutput{}, fmt.Errorf("settlement was rejected and automatic refund failed: %w (original: %v)", ledgerErr, err)
 			}
 			return nil, ProvisionEnvOutput{}, fmt.Errorf("settlement was rejected; sandbox destroyed; automatic refund %s submitted (tx=%s): %w", review.ID, txHash, err)
 		}
+		// Confirmed=false (pending/ambiguous): record for manual review, do not auto-refund.
 		review, ledgerErr := d.Refunds.RecordReview(in.PaymentData, reqs.Price.Asset, reqs.Price.Amount, "settlement outcome is ambiguous; automatic refund withheld", txHash)
 		if ledgerErr != nil {
 			return nil, ProvisionEnvOutput{}, fmt.Errorf("settlement outcome is ambiguous and compensation record failed: %w (original: %v)", ledgerErr, err)
@@ -229,8 +235,11 @@ func (d *Deps) ExtendCeiling(ctx context.Context, req *gomcp.CallToolRequest, in
 		return nil, ExtendCeilingOutput{}, err
 	}
 
+	// Bug fix: Sessions.Extend mutates lease.CeilingUSD += additionalUSD in place.
+	// lease.CeilingUSD now holds the updated total; return it directly.
+	// Adding in.AdditionalUSD again would double-count the extension.
 	return nil, ExtendCeilingOutput{
-		NewCeilingUSD:    lease.CeilingUSD + in.AdditionalUSD,
+		NewCeilingUSD:    lease.CeilingUSD,
 		ExpiresAt:        newExpiry.Format(time.RFC3339),
 		SettlementTxHash: txHash,
 	}, nil
@@ -249,7 +258,10 @@ func (d *Deps) Release(ctx context.Context, req *gomcp.CallToolRequest, in Relea
 	if err != nil {
 		return nil, ReleaseOutput{}, err
 	}
-	_ = d.Sandbox.Destroy(in.SessionID)
+	// Bug fix: log destroy errors instead of silently discarding them.
+	if destroyErr := d.Sandbox.Destroy(in.SessionID); destroyErr != nil {
+		log.Printf("warning: sandbox destroy failed for session %s: %v", in.SessionID, destroyErr)
+	}
 	d.Sessions.Delete(in.SessionID)
 	return nil, ReleaseOutput{FinalCostUSD: lease.SettledSoFarUSD}, nil
 }

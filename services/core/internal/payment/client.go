@@ -128,13 +128,35 @@ type settleResponse struct {
 	Error       string `json:"error,omitempty"`
 }
 
+// SettlementError carries the outcome of a failed settlement.
+//
+// Confirmed is true only when the facilitator provides evidence that the
+// transaction was not submitted to the network (e.g. "invalid_payment",
+// "insufficient_funds").  It is false for transient or ambiguous outcomes
+// such as "settlement_pending", network timeouts, or unknown error strings,
+// so callers can route those to manual review rather than auto-refund.
 type SettlementError struct {
-	Confirmed bool
+	Confirmed bool   // true => facilitator confirmed no value captured; safe to refund
+	TxHash    string // non-empty when the facilitator reported a transaction hash
 	Err       error
 }
 
 func (e *SettlementError) Error() string { return e.Err.Error() }
 func (e *SettlementError) Unwrap() error { return e.Err }
+
+// finalNonSubmissionErrors is the set of facilitator error reasons that
+// conclusively prove the payment was never submitted on-chain.  All other
+// error strings (including "settlement_pending") are treated as ambiguous.
+var finalNonSubmissionErrors = map[string]bool{
+	"invalid_payment":    true,
+	"insufficient_funds": true,
+	"invalid_scheme":     true,
+	"invalid_network":    true,
+	"invalid_asset":      true,
+	"invalid_amount":     true,
+	"payment_expired":    true,
+	"already_settled":    true, // duplicate — value was captured; route to review
+}
 
 func (c *Client) Settle(paymentData string, req PaymentRequirements) (settled bool, txHash string, err error) {
 	payload, err := decodePayment(paymentData)
@@ -173,8 +195,17 @@ func (c *Client) Settle(paymentData string, req PaymentRequirements) (settled bo
 		return false, "", fmt.Errorf("unexpected /settle response shape: %s", string(respBody))
 	}
 	if !sr.Success {
-		return false, "", &SettlementError{
-			Confirmed: true,
+		// Preserve a non-empty transaction hash so callers can record it for review.
+		reportedTx := sr.Transaction
+
+		// "settlement_pending" and any unrecognised reason are ambiguous: the
+		// transaction may be in-flight.  Only set Confirmed=true for reasons
+		// that prove the payment was never submitted to the chain.
+		confirmed := finalNonSubmissionErrors[sr.Error]
+
+		return false, reportedTx, &SettlementError{
+			Confirmed: confirmed,
+			TxHash:    reportedTx,
 			Err:       fmt.Errorf("settlement failed: %s", sr.Error),
 		}
 	}

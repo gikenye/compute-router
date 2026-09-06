@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -22,6 +23,9 @@ type Sender struct {
 	auth    *bind.TransactOpts
 	from    common.Address
 	chainID *big.Int
+	// nonceMu serializes nonce allocation through send so concurrent
+	// Transfer calls each get a unique nonce.
+	nonceMu sync.Mutex
 }
 
 func NewSender(rpcURL, privateKey, payout string, chainID int64) (*Sender, error) {
@@ -64,22 +68,30 @@ func (s *Sender) Transfer(ctx context.Context, asset, payer, amount, attribution
 		return "", err
 	}
 	data = append(data, attributionSuffix(attributionTag)...)
-	nonce, err := s.rpc.PendingNonceAt(ctx, s.from)
+	gasPrice, err := s.rpc.SuggestGasPrice(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	gasPrice, err := s.rpc.SuggestGasPrice(ctx)
+	// Serialize nonce allocation through send so concurrent refunds each
+	// get a unique nonce.  WaitMined is outside the lock: it does not
+	// allocate a nonce and may block for many seconds.
+	s.nonceMu.Lock()
+	nonce, err := s.rpc.PendingNonceAt(ctx, s.from)
 	if err != nil {
+		s.nonceMu.Unlock()
 		return "", err
 	}
 	tx := types.NewTransaction(nonce, common.HexToAddress(asset), big.NewInt(0), 100000, gasPrice, data)
 	signed, err := s.auth.Signer(s.from, tx)
 	if err != nil {
+		s.nonceMu.Unlock()
 		return "", err
 	}
-	if err := s.rpc.SendTransaction(ctx, signed); err != nil {
-		return "", err
+	sendErr := s.rpc.SendTransaction(ctx, signed)
+	s.nonceMu.Unlock()
+	if sendErr != nil {
+		return "", sendErr
 	}
 	receipt, err := bind.WaitMined(ctx, s.rpc, signed)
 	if err != nil {

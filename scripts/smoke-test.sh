@@ -55,8 +55,12 @@ curl -sS -X POST "$BASE/mcp" \
 echo
 echo
 echo "--- 4. Web UI at root ---"
-curl -sS -o /dev/null -w "GET / -> HTTP %{http_code}\n" "$BASE/"
-curl -sS -o /dev/null -w "GET /styles.css -> HTTP %{http_code}\n" "$BASE/styles.css"
+root_status="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/")"
+styles_status="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/styles.css")"
+printf 'GET / -> HTTP %s\n' "$root_status"
+printf 'GET /styles.css -> HTTP %s\n' "$styles_status"
+test "$root_status" = "200"
+test "$styles_status" = "200"
 echo "Expect 200 for both — confirms MCP moving to /mcp didn't break static serving at root."
 
 echo "--- Smoke test done. Real payment flow needs testnet funds + a signed payment_data — not covered here. ---"
