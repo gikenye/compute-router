@@ -31,6 +31,7 @@ function setupScrollVideo() {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const drawCover = (source, sourceWidth, sourceHeight) => {
+    if (!sourceWidth || !sourceHeight) return false;
     const width = window.innerWidth;
     const height = window.innerHeight;
     const scale = Math.max(width / sourceWidth, height / sourceHeight);
@@ -39,6 +40,7 @@ function setupScrollVideo() {
     context.fillStyle = "#0a0a0a";
     context.fillRect(0, 0, width, height);
     context.drawImage(source, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    return true;
   };
 
   const resize = () => {
@@ -56,18 +58,21 @@ function setupScrollVideo() {
       if (cacheReady && frames.length) {
         const index = Math.min(frames.length - 1, Math.floor(progress * (frames.length - 1)));
         if (index !== lastFrameIndex) {
-          drawCover(frames[index], frames[index].width, frames[index].height);
+          if (!drawCover(frames[index], frames[index].width, frames[index].height)) return;
           lastFrameIndex = index;
           stage.classList.add("is-ready");
         }
       } else if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        drawCover(video, video.videoWidth, video.videoHeight);
-        stage.classList.add("is-ready");
+        if (drawCover(video, video.videoWidth, video.videoHeight)) {
+          stage.classList.add("is-ready");
+        }
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "SecurityError") {
-        canvasDisabled = true;
-        stage.classList.add("canvas-unavailable");
+      if (
+        error instanceof DOMException &&
+        ["SecurityError", "InvalidStateError", "NotSupportedError"].includes(error.name)
+      ) {
+        useVideoFallback();
         return;
       }
       throw error;
@@ -79,6 +84,13 @@ function setupScrollVideo() {
       frameRequested = true;
       requestAnimationFrame(draw);
     }
+  };
+
+  const useVideoFallback = () => {
+    canvasDisabled = true;
+    stage.classList.remove("is-ready", "cache-ready");
+    stage.classList.add("canvas-unavailable");
+    requestDraw();
   };
 
   const tick = () => {
@@ -166,9 +178,16 @@ function setupScrollVideo() {
   const onLoadedData = () => {
     stage.classList.add("video-ready");
     requestDraw();
+    video.play().then(() => {
+      video.pause();
+      requestDraw();
+    }).catch(() => {
+      requestDraw();
+    });
     extractFrames().catch(() => {
       frames.forEach((frame) => frame.close());
       frames = [];
+      useVideoFallback();
     });
   };
 
