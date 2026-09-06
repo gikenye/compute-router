@@ -5,7 +5,7 @@
   "description": "Thin Cloudflare Worker wrapping @cloudflare/sandbox. Deliberately dumb — see /docs/ADR-001-language-choice.md. No pricing, payment, or business logic belongs in this package.",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --config wrangler.deploy.jsonc"
   },
   "dependencies": {
     "@cloudflare/sandbox": "0.7.0"
