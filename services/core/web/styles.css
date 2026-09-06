@@ -5,12 +5,15 @@ html { scroll-behavior:smooth; }
 body { background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
 .video-stage { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; background:#0a0a0a; }
 .video-stage::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.52)); }
+.video-poster { position:absolute; inset:0; background:#0a0a0a; opacity:1; transition:opacity .5s ease; }
 #hero-video, #hero-canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:opacity .7s ease; }
 #hero-video { opacity:.76; filter:saturate(.78) contrast(1.05); }
 #hero-canvas { opacity:0; }
+.video-stage.video-ready .video-poster { opacity:0; }
 .video-stage.is-ready #hero-canvas { opacity:.72; }
 .video-stage.is-ready #hero-video { opacity:0; }
 .video-stage.canvas-unavailable #hero-canvas { display:none; }
+.video-spacer { height:80vh; }
 a { color:inherit; text-decoration:none; }
 button { font-family:inherit; }
 button { cursor:pointer; }
@@ -80,4 +83,4 @@ pre { min-height:230px; padding:22px 20px; color:#cbd8e7; white-space:pre-wrap; 
 .footer a:hover { color:#fff; }
 @media (max-width:850px) { .page { padding:0 22px; } nav { display:none; } .header { grid-template-columns:1fr auto; } .hero { padding:100px 0 75px; } .runtime-strip { grid-template-columns:1fr 1fr; padding:18px 0; gap:18px; } .runtime-label { grid-column:1/-1; } .runtime-item { border-left:0; padding-left:0; } .protocol { grid-template-columns:1fr; padding:75px 0; gap:45px; } .footer { flex-wrap:wrap; } }
 @media (max-width:500px) { .header > .button { padding:0 12px; font-size:12px; } .logo { font-size:14px; } h1 { font-size:47px; } .actions { flex-wrap:wrap; } .button { padding:0 14px; } }
-@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .line { animation:none; opacity:1; } .page [data-reveal] { opacity:1; transform:none; transition:none; } #hero-video, #hero-canvas { transition:none; } }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .line { animation:none; opacity:1; } .page [data-reveal] { opacity:1; transform:none; transition:none; } #hero-video, #hero-canvas, .video-poster { transition:none; } }
