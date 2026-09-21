@@ -41,6 +41,30 @@ cd services/core && go run ./cmd/server
 cd services/sandbox-adapter && npx wrangler dev
 ```
 
+## Documentation and validation
+
+The public documentation is served with the web UI:
+
+- [Agent guide](services/core/web/docs/agent-guide.md) — how to discover and
+  call the MCP tools, handle x402 payment negotiation, and manage sessions.
+- [Validation plan](services/core/web/docs/validation-plan.md) — safe health
+  checks plus paid mainnet scenarios, expected results, edge cases, and the
+  evidence to capture.
+- [Roadmap](services/core/web/docs/roadmap.md) — what is live, what is
+  experimental, and what must be built next.
+- [Machine-readable guide](services/core/web/docs/agent-guide.json) — a
+  compact manifest for agents that prefer JSON over Markdown.
+
+Run the non-paying production contract checks with:
+
+```bash
+BASE_URL=https://mcp.computerouter.wtf bash scripts/production-health.sh
+```
+
+These checks do not spend funds or create a sandbox. The paid scenarios in the
+validation plan require an explicitly funded test wallet and must be run with
+small ceilings.
+
 ## License
 
 MIT 
