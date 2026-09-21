@@ -1,0 +1,30 @@
+{
+  "name": "Compute Router",
+  "version": "mvp",
+  "purpose": "Short-lived isolated build sandboxes for MCP-compatible agents",
+  "mcp_endpoint": "https://mcp.computerouter.wtf/mcp",
+  "agent_card": "https://mcp.computerouter.wtf/.well-known/agent-card.json",
+  "payment": {
+    "protocol": "x402",
+    "network": "Celo",
+    "assets": ["USDC", "USDT"],
+    "billing": "fixed two-minute blocks",
+    "advertised_price_usd": 0.02
+  },
+  "tools": [
+    {"name": "provision_env", "requires_payment": true},
+    {"name": "exec", "requires_payment": false},
+    {"name": "extend_ceiling", "requires_payment": true},
+    {"name": "release", "requires_payment": false}
+  ],
+  "runtime_limits": {
+    "template": "node-build",
+    "template_selection": "accepted_for_forward_compatibility_but_not_runtime_selectable",
+    "durable_storage": false
+  },
+  "docs": {
+    "human": "https://gikenye.github.io/compute-router/",
+    "agent": "https://gikenye.github.io/compute-router/agents.html",
+    "validation": "https://gikenye.github.io/compute-router/validation.html"
+  }
+}
