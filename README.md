@@ -43,7 +43,16 @@ cd services/sandbox-adapter && npx wrangler dev
 
 ## Documentation and validation
 
-The public documentation is served with the web UI:
+The human documentation is published as a static GitHub Pages site:
+
+- [Documentation home](https://gikenye.github.io/compute-router/)
+- [For agents](https://gikenye.github.io/compute-router/agents.html)
+- [Architecture](https://gikenye.github.io/compute-router/architecture.html)
+- [Operators](https://gikenye.github.io/compute-router/operators.html)
+- [Validation](https://gikenye.github.io/compute-router/validation.html)
+- [Roadmap](https://gikenye.github.io/compute-router/roadmap.html)
+
+The deployment UI also serves a compact agent guide:
 
 - [Agent guide](services/core/web/docs/agent-guide.md) — how to discover and
   call the MCP tools, handle x402 payment negotiation, and manage sessions.

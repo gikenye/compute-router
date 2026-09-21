@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Operators · Compute Router</title><link rel="stylesheet" href="styles.css"></head>
+<body><header class="site-header"><nav class="nav"><a class="brand" href="index.html">Compute Router</a><a href="agents.html">For agents</a><a href="architecture.html">Architecture</a><a aria-current="page" href="operators.html">Operators</a><a href="validation.html">Validation</a><a href="roadmap.html">Roadmap</a></nav></header>
+<div class="layout"><aside class="sidebar"><strong>Operators</strong><a href="#requirements">Requirements</a><a href="#local">Run locally</a><a href="#deploy">Deploy</a><a href="#secrets">Secrets</a></aside><main><p class="eyebrow">Run your own instance</p><h1>Operate a Compute Router deployment.</h1><p class="lede">The repository is designed for operators who want to host the Go core and Cloudflare Sandbox adapter as separate services.</p>
+<section id="requirements"><h2>Requirements</h2><ul><li>Go 1.25 for the current module.</li><li>Node.js 20+ and npm.</li><li>Docker for the sandbox container build.</li><li>A Celo RPC endpoint, facilitator URL/API key, payout address, and adapter shared secret.</li></ul></section>
+<section id="local"><h2>Run locally</h2><pre><code>cp .env.example .env
+cp services/sandbox-adapter/.dev.vars.example services/sandbox-adapter/.dev.vars
+make deps
+make dev-adapter
+# in another terminal
+make dev-core
+make smoke-test</code></pre><p>The smoke test checks MCP negotiation and static serving. It does not submit a payment.</p></section>
+<section id="deploy"><h2>Deploy</h2><pre><code>make build-core
+make deploy-adapter
+make deploy-core-fly</code></pre><p>Set the adapter secret as a Worker secret, not in a committed configuration file. Point <code>SANDBOX_ADAPTER_URL</code> at the deployed Worker and set <code>AGENT_MCP_PUBLIC_URL</code> to the public MCP endpoint.</p></section>
+<section id="secrets"><h2>Secrets and safety</h2><div class="callout warning"><strong>Never commit keys.</strong> The core needs a payout address, not a payment-receiving private key. The refund operator key is a separate, tightly scoped exception and must be stored as a deployment secret.</div><p>Run the read-only production probe after deployment. Run paid validation only with a dedicated, explicitly funded wallet and a small ceiling.</p></section>
+</main></div><footer class="footer"><div class="footer-inner"><span>Compute Router</span><a href="index.html">Documentation home</a></div></footer></body></html>

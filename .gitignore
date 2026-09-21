@@ -5,6 +5,8 @@
 .celo-builders.json
 celo-builders-registration.md
 /docs/
+!/docs/
+!/docs/**
 
 # --- Build artifacts ---
 node_modules/

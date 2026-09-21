@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compute Router documentation</title>
+  <meta name="description" content="Human and agent documentation for Compute Router, pay-per-use isolated compute on Celo.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header"><nav class="nav">
+    <a class="brand" href="index.html">Compute Router</a>
+    <a href="agents.html">For agents</a><a href="architecture.html">Architecture</a>
+    <a href="operators.html">Operators</a><a href="validation.html">Validation</a><a href="roadmap.html">Roadmap</a>
+  </nav></header>
+  <div class="layout">
+    <aside class="sidebar"><strong>Documentation</strong>
+      <a href="#start">Start here</a><a href="#fit">Is it a fit?</a><a href="#status">Current status</a><a href="#links">Live links</a>
+    </aside>
+    <main>
+      <p class="eyebrow">Agent-native infrastructure</p>
+      <h1>Compute when your agent needs a shell.</h1>
+      <p class="lede">Compute Router provisions a short-lived build environment, accepts an x402 payment in USDC or USDT on Celo, runs commands through MCP, and tears the environment down when the work is finished.</p>
+      <div class="callout" id="start"><strong>Start here.</strong> Agents should read <a href="agents.html">For agents</a>. Humans evaluating the system should read <a href="validation.html">Validation</a>. Operators should read <a href="operators.html">Operators</a>.</div>
+      <section id="fit"><h2>What it is—and is not</h2>
+        <div class="grid">
+          <article class="card"><h3>Use it for</h3><p>Package installation, compilation, tests, code generation, and other disposable Linux shell work that should not run inside the agent process.</p></article>
+          <article class="card"><h3>Do not use it for</h3><p>Durable files, privileged host access, long-running services, sensitive secrets, or selecting arbitrary runtime images. The MVP uses one <code>node-build</code> image.</p></article>
+        </div>
+      </section>
+      <section id="status"><h2>Current status</h2>
+        <table><tr><th>Capability</th><th>Status</th><th>Evidence boundary</th></tr>
+          <tr><td>MCP Streamable HTTP</td><td><span class="status">Live</span></td><td><code>/mcp</code>, agent card, and tool discovery are deployed surfaces.</td></tr>
+          <tr><td>x402 on Celo</td><td><span class="status">Implemented</span></td><td>Provision and extension negotiate fixed-price payment requirements.</td></tr>
+          <tr><td>Sandbox execution</td><td><span class="status">Implemented</span></td><td>Cloudflare Sandbox adapter boots, executes, and destroys sessions.</td></tr>
+          <tr><td>Per-second billing</td><td>Not yet</td><td>MVP charges fixed two-minute blocks; do not describe this as precise duration billing.</td></tr>
+          <tr><td>Durable session state</td><td>Not yet</td><td>Core lease state is in memory and can be lost on restart.</td></tr>
+        </table>
+      </section>
+      <section id="links"><h2>Live links</h2><p><a href="https://mcp.computerouter.wtf/mcp">MCP endpoint</a> · <a href="https://mcp.computerouter.wtf/.well-known/agent-card.json">Agent card</a> · <a href="https://github.com/gikenye/compute-router">Source repository</a></p></section>
+    </main>
+  </div>
+  <footer class="footer"><div class="footer-inner"><span>Compute Router · Celo mainnet</span><a href="https://github.com/gikenye/compute-router">View source on GitHub</a></div></footer>
+</body>
+</html>
