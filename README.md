@@ -30,7 +30,7 @@ is served live at `/.well-known/agent-card.json` on its deployed URL.
 
 ## Running it
 
-Requires Go 1.23+, Node 20+, and Docker. See each service's own
+Requires Go 1.25+, Node 20+, and Docker. See each service's own
 `Dockerfile` and `wrangler.jsonc` for deploy configuration.
 
 ```bash
