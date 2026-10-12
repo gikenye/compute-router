@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strconv"
 )
 
 type Price struct {
@@ -99,16 +100,26 @@ func DollarsToBaseUnits(dollars float64, decimals int) string {
 // Uses big.Int arithmetic to avoid int64 overflow with 18-decimal tokens at these
 // exchange rates (e.g. $0.02 at 4100 COP/USD = 82 COP = 82×10^18 base units,
 // which exceeds int64 and uint64 range).
+// FXToBaseUnits converts a USD price to base units for a non-USD-pegged token.
+// fiatPerUSD is the exchange rate (e.g. 1050.0 for ARS, 5.8 for BRL, 4100.0 for COP).
+// Uses big.Rat arithmetic via shortest-decimal string conversion to produce exact
+// results for typical USD prices (e.g. $0.02 × 4100 = 82×10^18, not 82000...01706).
 func FXToBaseUnits(usdAmount float64, decimals int, fiatPerUSD float64) string {
-	// Compute fiat total with float64; precision is sufficient for small USD amounts.
-	fiatTotal := new(big.Float).SetPrec(256).SetFloat64(usdAmount * fiatPerUSD)
-	// Scale by 10^decimals using exact big.Int arithmetic to avoid float64 imprecision.
-	scale := new(big.Float).SetPrec(256).SetInt(
+	// strconv.FormatFloat with 'g' and prec -1 gives the shortest decimal that
+	// round-trips through float64 (e.g. 0.02, not 0.020000000000000000416...).
+	// big.Rat.SetString parses it as an exact rational, eliminating float64 imprecision.
+	usd := new(big.Rat)
+	usd.SetString(strconv.FormatFloat(usdAmount, 'g', -1, 64)) //nolint:errcheck
+	rate := new(big.Rat)
+	rate.SetString(strconv.FormatFloat(fiatPerUSD, 'g', -1, 64)) //nolint:errcheck
+
+	product := new(big.Rat).Mul(usd, rate)
+	scale := new(big.Rat).SetInt(
 		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil),
 	)
-	fiatTotal.Mul(fiatTotal, scale)
-	bi, _ := fiatTotal.Int(nil) // truncates toward zero — rounds down, conservative
-	return bi.String()
+	scaled := new(big.Rat).Mul(product, scale)
+	// Quo truncates toward zero — conservative (rounds down for positive amounts).
+	return new(big.Int).Quo(scaled.Num(), scaled.Denom()).String()
 }
 
 type verifyResponse struct {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"unicode/utf8"
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -305,7 +306,7 @@ func (d *Deps) Exec(ctx context.Context, req *gomcp.CallToolRequest, in ExecInpu
 	}
 
 	capBytes := in.MaxOutputBytes
-	if capBytes <= 0 {
+	if capBytes <= 0 || capBytes > defaultMaxOutputBytes {
 		capBytes = defaultMaxOutputBytes
 	}
 	stdout, stderrStr, truncated := capOutputs(result.Stdout, result.Stderr, capBytes)
@@ -317,19 +318,31 @@ func (d *Deps) Exec(ctx context.Context, req *gomcp.CallToolRequest, in ExecInpu
 	}, nil
 }
 
-// capOutputs truncates each stream independently to maxBytes, appending a
-// notice so callers know output was elided.
+// capOutputs truncates each stream independently to maxBytes at a valid UTF-8
+// rune boundary, then appends a notice so callers know output was elided.
 func capOutputs(stdout, stderr string, maxBytes int) (string, string, bool) {
 	truncated := false
 	if len(stdout) > maxBytes {
-		stdout = stdout[:maxBytes] + "\n[output truncated]"
+		stdout = truncateUTF8(stdout, maxBytes) + "\n[output truncated]"
 		truncated = true
 	}
 	if len(stderr) > maxBytes {
-		stderr = stderr[:maxBytes] + "\n[output truncated]"
+		stderr = truncateUTF8(stderr, maxBytes) + "\n[output truncated]"
 		truncated = true
 	}
 	return stdout, stderr, truncated
+}
+
+// truncateUTF8 returns s[:n] adjusted back to the nearest valid rune start,
+// so the returned prefix is always valid UTF-8.
+func truncateUTF8(s string, n int) string {
+	if n >= len(s) {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 type ExtendCeilingInput struct {

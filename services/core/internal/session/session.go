@@ -65,7 +65,13 @@ func NewPersistentStore(path string) (*Store, error) {
 	return s, nil
 }
 
-// load reads the JSONL file and interns non-expired leases.
+// leaseRecord is the JSONL on-disk shape. Deleted is set to true for tombstones.
+type leaseRecord struct {
+	Lease
+	Deleted bool `json:"deleted,omitempty"`
+}
+
+// load reads the JSONL file and interns non-expired, non-deleted leases.
 func (s *Store) load() error {
 	f, err := os.Open(s.DatabasePath)
 	if os.IsNotExist(err) {
@@ -79,11 +85,20 @@ func (s *Store) load() error {
 	now := time.Now()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var l Lease
-		if err := json.Unmarshal(scanner.Bytes(), &l); err != nil {
+		var rec leaseRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 			continue // skip corrupt lines
 		}
-		if l.ExpiresAt.After(now) {
+		if rec.Deleted {
+			// Tombstone: remove any previously loaded entry with this ID.
+			if existing, ok := s.leases[rec.ID]; ok && existing.IdempotencyKey != "" {
+				delete(s.idempotencyIndex, existing.IdempotencyKey)
+			}
+			delete(s.leases, rec.ID)
+			continue
+		}
+		if rec.ExpiresAt.After(now) {
+			l := rec.Lease
 			s.leases[l.ID] = &l
 			if l.IdempotencyKey != "" {
 				s.idempotencyIndex[l.IdempotencyKey] = &l
@@ -93,17 +108,22 @@ func (s *Store) load() error {
 	return scanner.Err()
 }
 
-// append writes a lease to the backing file, if one is open.
-func (s *Store) append(l *Lease) {
+// appendRecord writes a leaseRecord to the backing file, if one is open.
+func (s *Store) appendRecord(rec leaseRecord) {
 	if s.f == nil {
 		return
 	}
-	b, err := json.Marshal(l)
+	b, err := json.Marshal(rec)
 	if err != nil {
 		return
 	}
 	b = append(b, '\n')
 	_, _ = s.f.Write(b)
+}
+
+// append writes a live lease record to the backing file.
+func (s *Store) append(l *Lease) {
+	s.appendRecord(leaseRecord{Lease: *l})
 }
 
 func (s *Store) Put(l *Lease) {
@@ -164,8 +184,12 @@ func (s *Store) Extend(id string, additionalUSD float64, newExpiry time.Time) er
 func (s *Store) Delete(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if l, ok := s.leases[id]; ok && l.IdempotencyKey != "" {
-		delete(s.idempotencyIndex, l.IdempotencyKey)
+	if l, ok := s.leases[id]; ok {
+		if l.IdempotencyKey != "" {
+			delete(s.idempotencyIndex, l.IdempotencyKey)
+		}
+		// Write a tombstone so load() skips this lease on restart.
+		s.appendRecord(leaseRecord{Lease: *l, Deleted: true})
 	}
 	delete(s.leases, id)
 }

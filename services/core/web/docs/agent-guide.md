@@ -14,9 +14,10 @@ LatAm assets (wARS, wBRL, wCOP) use Permit2 `permitTransferFrom` with an
 
 Use it when a task needs a real Linux shell, package installation, compilation,
 tests, or other build tools that should not run in the agent's own process.
-Do not use it for durable storage, long-running services, privileged host
-access, or workloads that require a specific image: the current MVP exposes
-one `node-build` image and the `template` field is forward-compatible only.
+Do not use it for durable storage, long-running services, or privileged host
+access. The available templates are advertised in the agent card's `runtimes`
+field; `node-build` is always present and additional runtimes (e.g.
+`python-build`, `rust-build`) appear when the deployment has them configured.
 
 ## Discovery
 
@@ -87,9 +88,10 @@ globally-unique string that identifies the provisioning attempt.
 
 ## Exec output limits
 
-`exec` caps `stdout` and `stderr` to 256 KiB each by default. Pass
-`max_output_bytes` to override (maximum enforced at the server). When a
-stream is truncated the response includes `"truncated": true`.
+`exec` caps `stdout` and `stderr` to 256 KiB (262 144 bytes) each by default.
+Pass `max_output_bytes` to request a smaller cap; the server clamps any value
+larger than 256 KiB back to 256 KiB, so you cannot raise the limit above that.
+When a stream is truncated the response includes `"truncated": true`.
 
 ## Minimal call shapes
 
