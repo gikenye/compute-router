@@ -3,9 +3,14 @@
 ## What it is
 
 Compute Router is an MCP server for short-lived, isolated build sandboxes.
-An agent pays a fixed two-minute block in USDC or USDT on Celo, receives a
-session ID, runs shell commands, and releases the session. The payment is
-settled by x402. The compute backend is the Cloudflare Sandbox adapter.
+An agent pays a fixed two-minute block in USDC, USDT, wARS (Peso Argentino),
+wBRL (Real Brasileiro), or wCOP (Peso Colombiano) on Celo, receives a session
+ID, runs shell commands, and releases the session. The payment is settled by
+x402. The compute backend is the Cloudflare Sandbox adapter.
+
+USD-pegged assets (USDC, USDT) use EIP-3009 `transferWithAuthorization`.
+LatAm assets (wARS, wBRL, wCOP) use Permit2 `permitTransferFrom` with an
+18-decimal token at the FX rate advertised in the payment requirement.
 
 Use it when a task needs a real Linux shell, package installation, compilation,
 tests, or other build tools that should not run in the agent's own process.
@@ -19,6 +24,18 @@ one `node-build` image and the `template` field is forward-compatible only.
 - Agent card: `https://mcp.computerouter.wtf/.well-known/agent-card.json`
 - Machine-readable guide: `/docs/agent-guide.json`
 
+The agent card (`/.well-known/agent-card.json`) includes machine-readable
+discovery fields so a caller agent can determine supported options before
+connecting:
+
+- `payment_protocol` — always `"x402"`.
+- `payment_network` — CAIP-2 chain ID, e.g. `"eip155:42220"` for Celo mainnet.
+- `accepted_assets` — array of asset objects, each with `symbol`, `name`,
+  `decimals`, `assetTransferMethod` (`"eip3009"` or `"permit2"`), and
+  `tokenAddress`.
+- `runtimes` — array of supported template names, e.g. `["node-build"]`.
+- `pricing` — `{ "price_per_block_usd": 0.02, "block_minutes": 2 }`.
+
 Start with an MCP `initialize` request, then call `tools/list`. The server
 exposes `provision_env`, `exec`, `extend_ceiling`, and `release`.
 
@@ -26,9 +43,11 @@ exposes `provision_env`, `exec`, `extend_ceiling`, and `release`.
 
 1. Call `provision_env` with `template: "node-build"` and a small
    `ceiling_usd` (for example `0.02`). Omit `payment_data` on the first call.
-2. Read the structured `payment_required` result. Select USDC or USDT, sign the
-   returned x402 requirement with the paying wallet, and retry with the
-   resulting `payment_data`. Never send a private key to Compute Router.
+2. Read the structured `payment_required` result. Choose an asset from the
+   `accepts` array. For USDC/USDT sign an EIP-3009 payload; for wARS/wBRL/wCOP
+   sign a Permit2 payload (the `extra.assetTransferMethod` field identifies
+   which scheme to use). Retry with the resulting `payment_data`. Never send a
+   private key to Compute Router.
 3. Save `session_id` and `expires_at` from the successful result.
 4. Call `exec` with that session ID. The response includes `stdout`, `stderr`,
    and `exit_code`; a non-zero exit code is a command result, not necessarily
@@ -59,14 +78,27 @@ Keep command output bounded in your own workflow, avoid putting secrets in
 commands, and release sessions promptly. The server does not provide a durable
 workspace: treat the sandbox as disposable.
 
+## Idempotency
+
+Supply `idempotency_key` on `provision_env` to make retries safe. A duplicate
+call with the same key returns the original `session_id` and `expires_at`
+without charging again. The key is opaque to the server; use a UUID or any
+globally-unique string that identifies the provisioning attempt.
+
+## Exec output limits
+
+`exec` caps `stdout` and `stderr` to 256 KiB each by default. Pass
+`max_output_bytes` to override (maximum enforced at the server). When a
+stream is truncated the response includes `"truncated": true`.
+
 ## Minimal call shapes
 
 ```json
-{"name":"provision_env","arguments":{"template":"node-build","ceiling_usd":0.02}}
+{"name":"provision_env","arguments":{"template":"node-build","ceiling_usd":0.02,"idempotency_key":"<uuid>"}}
 ```
 
 ```json
-{"name":"exec","arguments":{"session_id":"<session_id>","command":"npm test"}}
+{"name":"exec","arguments":{"session_id":"<session_id>","command":"npm test","max_output_bytes":65536}}
 ```
 
 ```json

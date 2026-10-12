@@ -17,9 +17,14 @@ type Config struct {
 	CeloChainID          int64
 	USDCTokenAddress     string
 	USDTTokenAddress     string
+	WARSTokenAddress     string
+	WBRLTokenAddress     string
+	WCOPTokenAddress     string
 	PayoutWallet         string
-	SandboxAdapterURL    string
-	SandboxAdapterSecret string
+	SandboxAdapterURL        string
+	SandboxAdapterURLPython  string
+	SandboxAdapterURLRust    string
+	SandboxAdapterSecret     string
 	PricePerBlockUSD     string
 	BlockMinutes         string
 
@@ -35,6 +40,7 @@ type Config struct {
 	RefundLedgerPath         string
 	RefundOperatorPrivateKey string
 	AttributionTag           string
+	LeaseDatabasePath        string
 }
 
 func mustEnv(key string) (string, error) {
@@ -70,7 +76,7 @@ func Load() (*Config, error) {
 		BlockMinutes:     envOr("BLOCK_MINUTES", "2"),
 
 		AgentName:         envOr("AGENT_NAME", "Compute Router"),
-		AgentDescription:  envOr("AGENT_DESCRIPTION", "Agent-native metered compute sandboxes, paid for in USDC or USDT on Celo via x402."),
+		AgentDescription:  envOr("AGENT_DESCRIPTION", "Agent-native metered compute sandboxes, paid for in USDC, USDT, wARS, wBRL, or wCOP on Celo via x402."),
 		AgentImageURI:     envOr("AGENT_IMAGE_URI", ""),
 		AgentMCPPublicURL: envOr("AGENT_MCP_PUBLIC_URL", ""),
 
@@ -79,6 +85,7 @@ func Load() (*Config, error) {
 		CencoriAPIKey:            envOr("CENCORI_API_KEY", ""),
 		SafetyCheckFailOpen:      envBool("SAFETY_CHECK_FAIL_OPEN", true),
 		RefundLedgerPath:         envOr("REFUND_LEDGER_PATH", "./data/refund-ledger.jsonl"),
+		LeaseDatabasePath:        envOr("LEASE_DATABASE_PATH", "./data/leases.jsonl"),
 		RefundOperatorPrivateKey: envOr("REFUND_OPERATOR_PRIVATE_KEY", os.Getenv("AGENT_OPERATOR_PRIVATE_KEY")),
 		AttributionTag:           envOr("ATTRIBUTION_ASSIGNED_TAG", "celo_9f3a3bce8894"),
 	}
@@ -101,12 +108,19 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	c.USDTTokenAddress = envOr("USDT_TOKEN_ADDRESS", "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e")
+	// LatAm Permit2 assets — optional; asset is omitted from payment options when address is empty.
+	c.WARSTokenAddress = envOr("WARS_TOKEN_ADDRESS", "")
+	c.WBRLTokenAddress = envOr("WBRL_TOKEN_ADDRESS", "")
+	c.WCOPTokenAddress = envOr("WCOP_TOKEN_ADDRESS", "")
 	if c.PayoutWallet, err = mustEnv("PAYOUT_WALLET"); err != nil {
 		return nil, err
 	}
 	if c.SandboxAdapterURL, err = mustEnv("SANDBOX_ADAPTER_URL"); err != nil {
 		return nil, err
 	}
+	// Optional per-runtime adapter URLs; empty means the runtime is unavailable.
+	c.SandboxAdapterURLPython = envOr("SANDBOX_ADAPTER_URL_PYTHON", "")
+	c.SandboxAdapterURLRust = envOr("SANDBOX_ADAPTER_URL_RUST", "")
 	if c.SandboxAdapterSecret, err = mustEnv("SANDBOX_ADAPTER_SHARED_SECRET"); err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 )
 
@@ -91,6 +92,23 @@ func DollarsToBaseUnits(dollars float64, decimals int) string {
 		multiplier *= 10
 	}
 	return fmt.Sprintf("%d", int64(dollars*multiplier))
+}
+
+// FXToBaseUnits converts a USD price to base units for a non-USD-pegged token.
+// fiatPerUSD is the exchange rate (e.g. 1050.0 for ARS, 5.8 for BRL, 4100.0 for COP).
+// Uses big.Int arithmetic to avoid int64 overflow with 18-decimal tokens at these
+// exchange rates (e.g. $0.02 at 4100 COP/USD = 82 COP = 82×10^18 base units,
+// which exceeds int64 and uint64 range).
+func FXToBaseUnits(usdAmount float64, decimals int, fiatPerUSD float64) string {
+	// Compute fiat total with float64; precision is sufficient for small USD amounts.
+	fiatTotal := new(big.Float).SetPrec(256).SetFloat64(usdAmount * fiatPerUSD)
+	// Scale by 10^decimals using exact big.Int arithmetic to avoid float64 imprecision.
+	scale := new(big.Float).SetPrec(256).SetInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil),
+	)
+	fiatTotal.Mul(fiatTotal, scale)
+	bi, _ := fiatTotal.Int(nil) // truncates toward zero — rounds down, conservative
+	return bi.String()
 }
 
 type verifyResponse struct {
