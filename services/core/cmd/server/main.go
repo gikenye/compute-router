@@ -25,13 +25,43 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
+	// Build the template-to-adapter map. node-build is always present;
+	// python-build and rust-build are added when their URLs are configured.
+	sandboxes := map[string]*sandboxclient.Client{
+		"node-build": sandboxclient.New(cfg.SandboxAdapterURL, cfg.SandboxAdapterSecret),
+	}
+	if cfg.SandboxAdapterURLPython != "" {
+		sandboxes["python-build"] = sandboxclient.New(cfg.SandboxAdapterURLPython, cfg.SandboxAdapterSecret)
+	}
+	if cfg.SandboxAdapterURLRust != "" {
+		sandboxes["rust-build"] = sandboxclient.New(cfg.SandboxAdapterURLRust, cfg.SandboxAdapterSecret)
+	}
+
+	// Session store — persistent when LEASE_DATABASE_PATH is set (default),
+	// in-memory only when explicitly set to empty string.
+	sessionStore, err := func() (*session.Store, error) {
+		if cfg.LeaseDatabasePath == "" {
+			log.Printf("LEASE_DATABASE_PATH is empty; using in-memory session store (sessions lost on restart)")
+			return session.NewStore(), nil
+		}
+		s, sErr := session.NewPersistentStore(cfg.LeaseDatabasePath)
+		if sErr != nil {
+			return nil, fmt.Errorf("session store: %w", sErr)
+		}
+		log.Printf("session store: persisting to %s", cfg.LeaseDatabasePath)
+		return s, nil
+	}()
+	if err != nil {
+		log.Fatalf("session store init: %v", err)
+	}
+
 	deps := &appmcp.Deps{
-		Cfg:      cfg,
-		Sessions: session.NewStore(),
-		Pay:      payment.New(cfg.FacilitatorURL, cfg.FacilitatorAPIKey),
-		Refunds:  refunds.New(cfg.RefundLedgerPath, mustRefundSender(cfg), cfg.AttributionTag),
-		Sandbox:  sandboxclient.New(cfg.SandboxAdapterURL, cfg.SandboxAdapterSecret),
-		Safety:   safety.New(cfg),
+		Cfg:       cfg,
+		Sessions:  sessionStore,
+		Pay:       payment.New(cfg.FacilitatorURL, cfg.FacilitatorAPIKey),
+		Refunds:   refunds.New(cfg.RefundLedgerPath, mustRefundSender(cfg), cfg.AttributionTag),
+		Sandboxes: sandboxes,
+		Safety:    safety.New(cfg),
 	}
 
 	server := gomcp.NewServer(&gomcp.Implementation{
