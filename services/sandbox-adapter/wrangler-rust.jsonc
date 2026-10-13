@@ -1,0 +1,31 @@
+{
+  // Rust-build runtime adapter — separate Worker deployment with a Rust toolchain image.
+  // Deploy with: npx wrangler deploy --config wrangler-rust.jsonc
+  // Set SANDBOX_ADAPTER_URL_RUST in the core service's .env to this Worker's URL.
+  "name": "compute-router-rust",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      // Replace with a Dockerfile that installs the Rust toolchain (rustup,
+      // cargo, rustfmt, clippy) and linker dependencies.
+      "image": "./Dockerfile.rust",
+      "instance_type": "lite",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "Sandbox", "name": "Sandbox" }
+    ]
+  },
+  "migrations": [
+    { "new_sqlite_classes": ["Sandbox"], "tag": "v1" }
+  ],
+  "vars": {
+    "SANDBOX_TRANSPORT": "rpc"
+  }
+}

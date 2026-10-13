@@ -1,0 +1,14 @@
+# Python-build runtime image — stub for future deployment.
+# Replace the RUN layer below with packages needed for your Python workloads
+# (e.g. python3-dev, pip, venv, common data-science / ML libraries).
+# Check https://developers.cloudflare.com/sandbox/configuration/dockerfile/
+# for the current recommended cloudflare/sandbox base tag before deploying.
+FROM docker.io/cloudflare/sandbox:0.7.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*

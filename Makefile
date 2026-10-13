@@ -1,4 +1,4 @@
-.PHONY: deps dev-core dev-adapter smoke-test build-core deploy-adapter deploy-core-fly txs-fund txs-journey-once txs-driver agent-register-testnet agent-register-mainnet
+.PHONY: deps dev-core dev-adapter smoke-test build-core deploy-adapter deploy-adapter-python deploy-adapter-rust deploy-core-fly txs-fund txs-journey-once txs-driver agent-register-testnet agent-register-mainnet
 
 # Run this FIRST, locally (needs network — this repo was scaffolded
 # without network access, so no go.sum/lockfile exists yet).
@@ -30,6 +30,14 @@ build-core:
 # Deploy targets — pick what fits. Both are independent.
 deploy-adapter:
 	cd services/sandbox-adapter && npx wrangler deploy
+
+# Additional runtime adapters — each deploys a separate Worker with its own image.
+# Requires Dockerfile.python / Dockerfile.rust in services/sandbox-adapter/.
+deploy-adapter-python:
+	cd services/sandbox-adapter && npx wrangler deploy --config wrangler-python.jsonc
+
+deploy-adapter-rust:
+	cd services/sandbox-adapter && npx wrangler deploy --config wrangler-rust.jsonc
 
 deploy-core-fly:
 	cd services/core && fly deploy
