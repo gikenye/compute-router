@@ -178,17 +178,6 @@ type ProvisionEnvOutput struct {
 }
 
 func (d *Deps) ProvisionEnv(ctx context.Context, req *gomcp.CallToolRequest, in ProvisionEnvInput) (*gomcp.CallToolResult, ProvisionEnvOutput, error) {
-	// Idempotency: if the caller supplied a key and a matching non-expired session
-	// already exists, return the original session without a new payment.
-	if in.IdempotencyKey != "" {
-		if existing := d.Sessions.GetByIdempotencyKey(in.IdempotencyKey); existing != nil {
-			return nil, ProvisionEnvOutput{
-				SessionID: existing.ID,
-				ExpiresAt: existing.ExpiresAt.Format(time.RFC3339),
-			}, nil
-		}
-	}
-
 	priceUSD, _ := parsePrice(d.Cfg.PricePerBlockUSD)
 	paymentAsset := in.PaymentAsset
 	if paymentAsset == "" {
@@ -202,6 +191,25 @@ func (d *Deps) ProvisionEnv(ctx context.Context, req *gomcp.CallToolRequest, in 
 	if in.PaymentData == "" {
 		result, err := paymentRequiredResult(d.buildPaymentOptions(priceUSD))
 		return result, ProvisionEnvOutput{}, err
+	}
+
+	// Reserve the idempotency key now that the caller has payment_data.
+	// Reserving after the payment_required round-trip means we don't hold a
+	// slot while the client is offline signing — only during Boot+Settle.
+	// Put on success removes the pending entry, so the deferred release is a
+	// no-op on the happy path and cleans up on every failure path.
+	if in.IdempotencyKey != "" {
+		existing, err := d.Sessions.Reserve(in.IdempotencyKey, in.Template)
+		if err != nil {
+			return nil, ProvisionEnvOutput{}, err
+		}
+		if existing != nil {
+			return nil, ProvisionEnvOutput{
+				SessionID: existing.ID,
+				ExpiresAt: existing.ExpiresAt.Format(time.RFC3339),
+			}, nil
+		}
+		defer d.Sessions.ReleaseReservation(in.IdempotencyKey)
 	}
 
 	ok, err := d.Pay.Verify(in.PaymentData, reqs)

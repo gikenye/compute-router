@@ -4,12 +4,17 @@ package session
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
+
+// ErrKeyInFlight is returned by Reserve when another concurrent request is
+// already provisioning with the same idempotency key.
+var ErrKeyInFlight = errors.New("idempotency key is currently in-flight; retry after the in-progress request completes")
 
 // Lease records the state of a single provisioned session.
 type Lease struct {
@@ -21,13 +26,20 @@ type Lease struct {
 	IdempotencyKey   string    `json:"idempotency_key,omitempty"`
 }
 
+// pendingKey records an idempotency key that has been reserved for an
+// in-progress provisioning attempt.
+type pendingKey struct {
+	Template string
+}
+
 // Store is an in-memory lease registry with optional JSONL persistence.
 // When DatabasePath is non-empty it writes new leases to that file and
 // reloads them on startup, so sessions survive process restarts.
 type Store struct {
 	mu               sync.Mutex
 	leases           map[string]*Lease
-	idempotencyIndex map[string]*Lease // idempotency key → lease
+	idempotencyIndex map[string]*Lease  // idempotency key → committed lease
+	pendingKeys      map[string]*pendingKey // idempotency key → in-flight reservation
 	DatabasePath     string
 	f                *os.File
 }
@@ -37,6 +49,7 @@ func NewStore() *Store {
 	s := &Store{
 		leases:           make(map[string]*Lease),
 		idempotencyIndex: make(map[string]*Lease),
+		pendingKeys:      make(map[string]*pendingKey),
 	}
 	go s.reapLoop()
 	return s
@@ -51,6 +64,7 @@ func NewPersistentStore(path string) (*Store, error) {
 	s := &Store{
 		leases:           make(map[string]*Lease),
 		idempotencyIndex: make(map[string]*Lease),
+		pendingKeys:      make(map[string]*pendingKey),
 		DatabasePath:     path,
 	}
 	if err := s.load(); err != nil {
@@ -132,8 +146,62 @@ func (s *Store) Put(l *Lease) {
 	s.leases[l.ID] = l
 	if l.IdempotencyKey != "" {
 		s.idempotencyIndex[l.IdempotencyKey] = l
+		delete(s.pendingKeys, l.IdempotencyKey) // fulfil the reservation
 	}
 	s.append(l)
+}
+
+// Reserve atomically looks up or claims an idempotency key.
+//
+//   - Returns (existing lease, nil) when a non-expired lease already exists for
+//     the key; the caller should return the original session to the client.
+//     Returns an error if the existing lease used a different template.
+//   - Returns (nil, nil) when the key was successfully reserved; the caller must
+//     call Put on success or ReleaseReservation on any failure.
+//   - Returns (nil, ErrKeyInFlight) when another request is currently provisioning
+//     with this key; the caller should surface a retriable conflict to the client.
+func (s *Store) Reserve(key, template string) (*Lease, error) {
+	if key == "" {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Active lease: return it if the template matches.
+	if l, ok := s.idempotencyIndex[key]; ok {
+		if time.Now().After(l.ExpiresAt) {
+			// Expired: evict and fall through to reserve.
+			if l.IdempotencyKey != "" {
+				delete(s.idempotencyIndex, l.IdempotencyKey)
+			}
+			delete(s.leases, l.ID)
+		} else {
+			if l.Template != template {
+				return nil, fmt.Errorf("idempotency key %q was used with template %q; cannot reuse for template %q", key, l.Template, template)
+			}
+			return l, nil
+		}
+	}
+
+	// In-flight: another concurrent request already holds this key.
+	if _, ok := s.pendingKeys[key]; ok {
+		return nil, ErrKeyInFlight
+	}
+
+	// Claim the key.
+	s.pendingKeys[key] = &pendingKey{Template: template}
+	return nil, nil
+}
+
+// ReleaseReservation removes a pending key reservation created by Reserve.
+// Safe to call when the key is not pending (no-op), including after Put.
+func (s *Store) ReleaseReservation(key string) {
+	if key == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.pendingKeys, key)
 }
 
 func (s *Store) Get(id string) (*Lease, error) {
